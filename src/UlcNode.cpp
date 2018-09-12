@@ -3,80 +3,65 @@
 namespace dataspeed_ulc_ros
 {
 
-UlcNode::UlcNode(ros::NodeHandle n, ros::NodeHandle pn)
+UlcNode::UlcNode(ros::NodeHandle n, ros::NodeHandle pn) :
+  enable_(false)
 {
   pub_report_ = n.advertise<dataspeed_dbw_msgs::LatLonReport>("lat_lon_report", 2);
   pub_can_ = n.advertise<can_msgs::Frame>("can_tx", 10);
 
   sub_can_ = n.subscribe<can_msgs::Frame>("can_rx", 100, &UlcNode::recvCan, this);
   sub_lat_lon_cmd_ = n.subscribe<dataspeed_dbw_msgs::LatLonCmd>("lat_lon_cmd", 1, &UlcNode::recvLatLonCmd, this);
+  sub_twist_ = n.subscribe<geometry_msgs::Twist>("cmd_vel", 1, &UlcNode::recvTwist, this);
+  sub_twist_stamped_ = n.subscribe<geometry_msgs::TwistStamped>("cmd_vel_stamped", 1, &UlcNode::recvTwistStamped, this);
+  sub_enable_ = n.subscribe<std_msgs::Bool>("dbw_enabled", 1, &UlcNode::recvEnable, this);
 
   double config_frequency = 5.0;
   pn.getParam("config_frequency", config_frequency);
   config_frequency = (config_frequency > 50) ? 50.0 : config_frequency;
   config_timer_ = n.createTimer(ros::Duration(1.0 / config_frequency), &UlcNode::configTimerCb, this);
+  cmd_timer_ = n.createTimer(ros::Duration(0.02), &UlcNode::cmdTimerCb, this);
+}
 
+void UlcNode::recvEnable(const std_msgs::BoolConstPtr& msg)
+{
+  enable_ = msg->data;
 }
 
 void UlcNode::recvLatLonCmd(const dataspeed_dbw_msgs::LatLonCmdConstPtr& msg)
 {
   lat_lon_cmd_ = *msg;
+  cmd_stamp_ = ros::Time::now();
+}
 
-  can_msgs::Frame cmd_out;
-  cmd_out.id = ID_LAT_LON_CMD;
-  cmd_out.is_extended = false;
-  cmd_out.dlc = sizeof(MsgLatLonCmd);
-  MsgLatLonCmd *cmd_ptr = (MsgLatLonCmd *)cmd_out.data.elems;
-  memset(cmd_ptr, 0x00, sizeof(*cmd_ptr));
-  if (enabled()) {
-    // Populate flag bits
-    cmd_ptr->enable_pedals = msg->enable_pedals;
-    cmd_ptr->enable_steering = msg->enable_steering;
-    cmd_ptr->enable_shifting = msg->enable_shifting;
-    cmd_ptr->shift_from_park = msg->shift_from_park;
+void UlcNode::setDefaultCmdFields()
+{
+  lat_lon_cmd_.clear = false;
+  lat_lon_cmd_.enable_pedals = true;
+  lat_lon_cmd_.enable_shifting = true;
+  lat_lon_cmd_.enable_steering = true;
+  lat_lon_cmd_.shift_from_park = false;
+  lat_lon_cmd_.linear_accel = 0;
+  lat_lon_cmd_.linear_decel = 0;
+  lat_lon_cmd_.angular_accel = 0;
+  lat_lon_cmd_.lateral_accel = 0;
+}
 
-    // Populate speed command with range check
-    if (msg->linear_velocity < (INT16_MIN * 0.0025f)) {
-      cmd_ptr->linear_velocity = INT16_MIN;
-      ROS_WARN_THROTTLE(1.0, "LatLon command speed [%f m/s] out of range -- saturating to %f m/s", msg->linear_velocity, INT16_MIN * 0.0025f);
-    } else if (msg->linear_velocity > (INT16_MAX * 0.0025f)) {
-      cmd_ptr->linear_velocity = INT16_MAX;
-      ROS_WARN_THROTTLE(1.0, "LatLon command speed [%f m/s] out of range -- saturating to %f m/s", msg->linear_velocity, INT16_MAX * 0.0025f);
-    } else {
-      cmd_ptr->linear_velocity = (int16_t) (msg->linear_velocity / 0.0025f);
-    }
+void UlcNode::recvTwist(const geometry_msgs::TwistConstPtr& msg)
+{
+  setDefaultCmdFields();
+  lat_lon_cmd_.linear_velocity = msg->linear.x;
+  lat_lon_cmd_.yaw_command = msg->angular.z;
+  lat_lon_cmd_.steering_mode = dataspeed_dbw_msgs::LatLonCmd::YAW_RATE_MODE;
+  cmd_stamp_ = ros::Time::now();
+}
 
-    // Populate yaw command with range check
-    cmd_ptr->steering_mode = msg->steering_mode;
-    if (msg->steering_mode == dataspeed_dbw_msgs::LatLonCmd::YAW_RATE_MODE) {
-      if (msg->yaw_command < (INT16_MIN * 0.00025f)) {
-        cmd_ptr->yaw_command = INT16_MIN;
-        ROS_WARN_THROTTLE(1.0, "LatLon yaw rate command [%f rad/s] out of range -- saturating to %f rad/s", msg->yaw_command, INT16_MIN * 0.00025f);
-      } else if (msg->yaw_command > (INT16_MAX * 0.00025f)) {
-        cmd_ptr->yaw_command = INT16_MAX;
-        ROS_WARN_THROTTLE(1.0, "LatLon yaw rate command [%f rad/s] out of range -- saturating to %f rad/s", msg->yaw_command, INT16_MAX * 0.00025f);
-      } else {
-        cmd_ptr->yaw_command = (int16_t)(msg->yaw_command / 0.00025f);
-      }
-    } else if (msg->steering_mode == dataspeed_dbw_msgs::LatLonCmd::CURVATURE_MODE) {
-      if (msg->yaw_command < (INT16_MIN * 0.0000061f)) {
-        cmd_ptr->yaw_command = INT16_MIN;
-        ROS_WARN_THROTTLE(1.0, "LatLon curvature command [%f 1/m] out of range -- saturating to %f 1/m", msg->yaw_command, INT16_MIN * 0.0000061f);
-      } else if (msg->yaw_command > (INT16_MAX * 0.0000061f)) {
-        cmd_ptr->yaw_command = INT16_MAX;
-        ROS_WARN_THROTTLE(1.0, "LatLon curvature command [%f 1/m] out of range -- saturating to %f 1/m", msg->yaw_command, INT16_MAX * 0.0000061f);
-      } else {
-        cmd_ptr->yaw_command = (int16_t)(msg->yaw_command / 0.0000061f);
-      }
-    } else {
-      cmd_ptr->yaw_command = 0;
-      ROS_WARN_THROTTLE(1.0, "Unsupported LatLon steering control mode [%d]", msg->steering_mode);
-    }
-  }
-  if (clear() || msg->clear) {
-    cmd_ptr->clear = 1;
-  }
-  pub_can_.publish(cmd_out);
+void UlcNode::recvTwistStamped(const geometry_msgs::TwistStampedConstPtr& msg)
+{
+  setDefaultCmdFields();
+  lat_lon_cmd_.linear_velocity = msg->twist.linear.x;
+  lat_lon_cmd_.yaw_command = msg->twist.angular.z;
+  lat_lon_cmd_.steering_mode = dataspeed_dbw_msgs::LatLonCmd::YAW_RATE_MODE;
+  cmd_stamp_ = ros::Time::now();
 }
 
 void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
@@ -96,12 +81,73 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
           lat_lon_report_.speed_enabled = ptr->speed_enabled;
           lat_lon_report_.steering_enabled = ptr->steering_enabled;
           lat_lon_report_.reference_source = ptr->reference_source;
+          lat_lon_report_.speed_preempted = ptr->speed_preempted;
+          lat_lon_report_.steering_preempted = ptr->steer_preempted;
+          lat_lon_report_.override_latched = ptr->override;
           lat_lon_report_.steering_mode = ptr->steering_mode;
           pub_report_.publish(lat_lon_report_);
         }
         break;
     }
   }
+}
+
+void UlcNode::cmdTimerCb(const ros::TimerEvent& event)
+{
+  can_msgs::Frame cmd_out;
+  cmd_out.id = ID_LAT_LON_CMD;
+  cmd_out.is_extended = false;
+  cmd_out.dlc = sizeof(MsgLatLonCmd);
+  MsgLatLonCmd *cmd_ptr = (MsgLatLonCmd *)cmd_out.data.elems;
+  memset(cmd_ptr, 0x00, sizeof(*cmd_ptr));
+
+  // Populate enable bits
+  if (enable_) {
+    cmd_ptr->enable_pedals = lat_lon_cmd_.enable_pedals;
+    cmd_ptr->enable_steering = lat_lon_cmd_.enable_steering;
+    cmd_ptr->enable_shifting = lat_lon_cmd_.enable_shifting;
+    cmd_ptr->shift_from_park = lat_lon_cmd_.shift_from_park;
+  }
+
+  // Populate speed command with range check
+  if (lat_lon_cmd_.linear_velocity < (INT16_MIN * 0.0025f)) {
+    cmd_ptr->linear_velocity = INT16_MIN;
+    ROS_WARN_THROTTLE(1.0, "LatLon command speed [%f m/s] out of range -- saturating to %f m/s", lat_lon_cmd_.linear_velocity, INT16_MIN * 0.0025f);
+  } else if (lat_lon_cmd_.linear_velocity > (INT16_MAX * 0.0025f)) {
+    cmd_ptr->linear_velocity = INT16_MAX;
+    ROS_WARN_THROTTLE(1.0, "LatLon command speed [%f m/s] out of range -- saturating to %f m/s", lat_lon_cmd_.linear_velocity, INT16_MAX * 0.0025f);
+  } else {
+    cmd_ptr->linear_velocity = (int16_t) (lat_lon_cmd_.linear_velocity / 0.0025f);
+  }
+
+  // Populate yaw command with range check
+  cmd_ptr->steering_mode = lat_lon_cmd_.steering_mode;
+  if (lat_lon_cmd_.steering_mode == dataspeed_dbw_msgs::LatLonCmd::YAW_RATE_MODE) {
+    if (lat_lon_cmd_.yaw_command < (INT16_MIN * 0.00025f)) {
+      cmd_ptr->yaw_command = INT16_MIN;
+      ROS_WARN_THROTTLE(1.0, "LatLon yaw rate command [%f rad/s] out of range -- saturating to %f rad/s", lat_lon_cmd_.yaw_command, INT16_MIN * 0.00025f);
+    } else if (lat_lon_cmd_.yaw_command > (INT16_MAX * 0.00025f)) {
+      cmd_ptr->yaw_command = INT16_MAX;
+      ROS_WARN_THROTTLE(1.0, "LatLon yaw rate command [%f rad/s] out of range -- saturating to %f rad/s", lat_lon_cmd_.yaw_command, INT16_MAX * 0.00025f);
+    } else {
+      cmd_ptr->yaw_command = (int16_t)(lat_lon_cmd_.yaw_command / 0.00025f);
+    }
+  } else if (lat_lon_cmd_.steering_mode == dataspeed_dbw_msgs::LatLonCmd::CURVATURE_MODE) {
+    if (lat_lon_cmd_.yaw_command < (INT16_MIN * 0.0000061f)) {
+      cmd_ptr->yaw_command = INT16_MIN;
+      ROS_WARN_THROTTLE(1.0, "LatLon curvature command [%f 1/m] out of range -- saturating to %f 1/m", lat_lon_cmd_.yaw_command, INT16_MIN * 0.0000061f);
+    } else if (lat_lon_cmd_.yaw_command > (INT16_MAX * 0.0000061f)) {
+      cmd_ptr->yaw_command = INT16_MAX;
+      ROS_WARN_THROTTLE(1.0, "LatLon curvature command [%f 1/m] out of range -- saturating to %f 1/m", lat_lon_cmd_.yaw_command, INT16_MAX * 0.0000061f);
+    } else {
+      cmd_ptr->yaw_command = (int16_t)(lat_lon_cmd_.yaw_command / 0.0000061f);
+    }
+  } else {
+    cmd_ptr->yaw_command = 0;
+    ROS_WARN_THROTTLE(1.0, "Unsupported LatLon steering control mode [%d]", lat_lon_cmd_.steering_mode);
+  }
+
+  pub_can_.publish(cmd_out);
 }
 
 void UlcNode::configTimerCb(const ros::TimerEvent& event)

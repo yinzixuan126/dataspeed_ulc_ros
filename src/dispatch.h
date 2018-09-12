@@ -43,10 +43,11 @@ typedef struct {
   uint16_t steering_mode: 1;
   int8_t  accel_ref; // 0.05 m/s^2
   int8_t accel_meas; // 0.05 m/s^2
-  uint8_t max_steering_angle; // 0.1 deg
-  uint8_t max_steering_vel :6; //  0.1 deg/s
-  uint8_t preempted: 1;
+  uint8_t max_steering_angle: 7; // 5 deg
   uint8_t override: 1;
+  uint8_t max_steering_vel :6; //  8 deg/s
+  uint8_t steer_preempted: 1;
+  uint8_t speed_preempted: 1;
 } MsgLatLonReport;
 
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)

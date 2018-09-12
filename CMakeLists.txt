@@ -33,16 +33,22 @@ target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
 )
 
-add_executable(${PROJECT_NAME}_node
+add_executable(ulc_node
   src/node.cpp
 )
-target_link_libraries(${PROJECT_NAME}_node
+target_link_libraries(ulc_node
   ${PROJECT_NAME}
   ${catkin_LIBRARIES}
 )
 
 ### Install Rules
-# TODO
+install(TARGETS ${PROJECT_NAME} ulc_node
+        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+        LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+)
+install(FILES nodelets.xml
+        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
 
 ### Tests
 if (CATKIN_ENABLE_TESTING)
