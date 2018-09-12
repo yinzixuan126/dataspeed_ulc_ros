@@ -76,8 +76,8 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
           lat_lon_report_.accel_ref = (float)ptr->accel_ref * 0.05f;
           lat_lon_report_.speed_meas = (float)ptr->speed_meas / 256.0f;
           lat_lon_report_.accel_meas = (float)ptr->accel_meas * 0.05f;
-          lat_lon_report_.max_steering_angle = (float)ptr->max_steering_angle * 2.0f;
-          lat_lon_report_.max_steering_vel = (float)ptr->max_steering_vel * 2.0f;
+          lat_lon_report_.max_steering_angle = (float)ptr->max_steering_angle * 5.0f;
+          lat_lon_report_.max_steering_vel = (float)ptr->max_steering_vel * 8.0f;
           lat_lon_report_.speed_enabled = ptr->speed_enabled;
           lat_lon_report_.steering_enabled = ptr->steering_enabled;
           lat_lon_report_.reference_source = ptr->reference_source;
