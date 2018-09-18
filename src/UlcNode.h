@@ -38,7 +38,6 @@ private:
   ros::Timer cmd_timer_;
 
   dataspeed_dbw_msgs::LatLonCmd lat_lon_cmd_;
-  dataspeed_dbw_msgs::LatLonReport lat_lon_report_;
   ros::Time cmd_stamp_;
   bool enable_;
 };

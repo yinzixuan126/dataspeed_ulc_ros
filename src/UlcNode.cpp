@@ -71,21 +71,22 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
       case ID_LAT_LON_REPORT:
         if (msg->dlc >= sizeof(MsgLatLonReport)) {
           const MsgLatLonReport *ptr = (const MsgLatLonReport *)msg->data.elems;
-          lat_lon_report_.header.stamp = msg->header.stamp;
-          lat_lon_report_.speed_ref = (float)ptr->speed_ref / 256.0f;
-          lat_lon_report_.accel_ref = (float)ptr->accel_ref * 0.05f;
-          lat_lon_report_.speed_meas = (float)ptr->speed_meas / 256.0f;
-          lat_lon_report_.accel_meas = (float)ptr->accel_meas * 0.05f;
-          lat_lon_report_.max_steering_angle = (float)ptr->max_steering_angle * 5.0f;
-          lat_lon_report_.max_steering_vel = (float)ptr->max_steering_vel * 8.0f;
-          lat_lon_report_.speed_enabled = ptr->speed_enabled;
-          lat_lon_report_.steering_enabled = ptr->steering_enabled;
-          lat_lon_report_.reference_source = ptr->reference_source;
-          lat_lon_report_.speed_preempted = ptr->speed_preempted;
-          lat_lon_report_.steering_preempted = ptr->steer_preempted;
-          lat_lon_report_.override_latched = ptr->override;
-          lat_lon_report_.steering_mode = ptr->steering_mode;
-          pub_report_.publish(lat_lon_report_);
+          dataspeed_dbw_msgs::LatLonReport lat_lon_report;
+          lat_lon_report.header.stamp = msg->header.stamp;
+          lat_lon_report.speed_ref = (float)ptr->speed_ref / 256.0f;
+          lat_lon_report.accel_ref = (float)ptr->accel_ref * 0.05f;
+          lat_lon_report.speed_meas = (float)ptr->speed_meas / 256.0f;
+          lat_lon_report.accel_meas = (float)ptr->accel_meas * 0.05f;
+          lat_lon_report.max_steering_angle = (float)ptr->max_steering_angle * 5.0f;
+          lat_lon_report.max_steering_vel = (float)ptr->max_steering_vel * 8.0f;
+          lat_lon_report.speed_enabled = ptr->speed_enabled;
+          lat_lon_report.steering_enabled = ptr->steering_enabled;
+          lat_lon_report.reference_source = ptr->reference_source;
+          lat_lon_report.speed_preempted = ptr->speed_preempted;
+          lat_lon_report.steering_preempted = ptr->steer_preempted;
+          lat_lon_report.override_latched = ptr->override;
+          lat_lon_report.steering_mode = ptr->steering_mode;
+          pub_report_.publish(lat_lon_report);
         }
         break;
     }
@@ -94,6 +95,10 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
 
 void UlcNode::cmdTimerCb(const ros::TimerEvent& event)
 {
+  if ((event.current_real - cmd_stamp_).toSec() > 0.1) {
+    return;
+  }
+
   can_msgs::Frame cmd_out;
   cmd_out.id = ID_LAT_LON_CMD;
   cmd_out.is_extended = false;
@@ -152,13 +157,17 @@ void UlcNode::cmdTimerCb(const ros::TimerEvent& event)
 
 void UlcNode::configTimerCb(const ros::TimerEvent& event)
 {
+  if ((event.current_real - cmd_stamp_).toSec() > 0.1) {
+    return;
+  }
+
   can_msgs::Frame config_out;
   config_out.id = ID_LAT_LON_CONFIG;
   config_out.is_extended = false;
   config_out.dlc = sizeof(MsgLatLonConfig);
   MsgLatLonConfig *config_ptr = (MsgLatLonConfig *)config_out.data.elems;
 
-  // Populate linear accel limit with range check
+  // Populate linear accel limit with range check and saturation
   if (lat_lon_cmd_.linear_accel < 0.0) {
     config_ptr->linear_accel = 0;
     ROS_WARN_THROTTLE(1.0, "Linear accel limit [%f m/s^2] out of range -- saturating to 0", lat_lon_cmd_.linear_accel);
@@ -169,7 +178,7 @@ void UlcNode::configTimerCb(const ros::TimerEvent& event)
     config_ptr->linear_accel = (uint8_t)(lat_lon_cmd_.linear_accel / 0.02f);
   }
 
-  // Populate linear decel limit with range check
+  // Populate linear decel limit with range check and saturation
   if (lat_lon_cmd_.linear_decel < 0.0) {
     config_ptr->linear_decel = 0;
     ROS_WARN_THROTTLE(1.0, "Linear decel limit [%f m/s^2] out of range -- saturating to 0", lat_lon_cmd_.linear_decel);
@@ -180,7 +189,7 @@ void UlcNode::configTimerCb(const ros::TimerEvent& event)
     config_ptr->linear_decel = (uint8_t)(lat_lon_cmd_.linear_decel / 0.02f);
   }
 
-  // Populate angular accel limit with range check
+  // Populate angular accel limit with range check and saturation
   if (lat_lon_cmd_.angular_accel < 0.0) {
     config_ptr->angular_accel = 0;
     ROS_WARN_THROTTLE(1.0, "Angular accel limit [%f rad/s^2] out of range -- saturating to 0", lat_lon_cmd_.angular_accel);
@@ -191,7 +200,7 @@ void UlcNode::configTimerCb(const ros::TimerEvent& event)
     config_ptr->angular_accel = (uint8_t)(lat_lon_cmd_.angular_accel / 0.02f);
   }
 
-  // Populate lateral accel limit with range check
+  // Populate lateral accel limit with range check and saturation
   if (lat_lon_cmd_.lateral_accel < 0.0) {
     config_ptr->lateral_accel = 0;
     ROS_WARN_THROTTLE(1.0, "Lateral accel limit [%f m/s^2] out of range -- saturating to 0", lat_lon_cmd_.lateral_accel);
