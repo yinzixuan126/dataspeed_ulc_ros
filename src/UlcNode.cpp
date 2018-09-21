@@ -17,7 +17,11 @@ UlcNode::UlcNode(ros::NodeHandle n, ros::NodeHandle pn) :
 
   double config_frequency = 5.0;
   pn.getParam("config_frequency", config_frequency);
-  config_frequency = (config_frequency > 50) ? 50.0 : config_frequency;
+  if (config_frequency > 50.0) {
+    config_frequency = 50.0;
+  } else if (config_frequency < 5.0) {
+    config_frequency = 5.0;
+  }
   config_timer_ = n.createTimer(ros::Duration(1.0 / config_frequency), &UlcNode::configTimerCb, this);
   cmd_timer_ = n.createTimer(ros::Duration(0.02), &UlcNode::cmdTimerCb, this);
 }
