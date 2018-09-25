@@ -16,10 +16,13 @@ elseif ("${CMAKE_CXX_STANDARD_COMPUTED_DEFAULT}" STREQUAL "98")
   set(CMAKE_CXX_STANDARD 11)
 endif()
 
-catkin_package()
+catkin_package(
+  INCLUDE_DIRS include
+)
 
 include_directories(
   ${catkin_INCLUDE_DIRS}
+  include
 )
 
 add_library(${PROJECT_NAME}
@@ -48,6 +51,9 @@ install(TARGETS ${PROJECT_NAME} ulc_node
 )
 install(FILES nodelets.xml
         DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+install(DIRECTORY include/${PROJECT_NAME}/
+        DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
 
 ### Tests

@@ -7,7 +7,7 @@
 #include <can_msgs/Frame.h>
 #include <dataspeed_dbw_msgs/LatLonCmd.h>
 #include <dataspeed_dbw_msgs/LatLonReport.h>
-#include "dispatch.h"
+#include <dataspeed_ulc_ros/dispatch.h>
 
 namespace dataspeed_ulc_ros
 {
