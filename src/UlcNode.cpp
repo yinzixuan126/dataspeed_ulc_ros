@@ -77,9 +77,9 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
           const MsgLatLonReport *ptr = (const MsgLatLonReport *)msg->data.elems;
           dataspeed_dbw_msgs::LatLonReport lat_lon_report;
           lat_lon_report.header.stamp = msg->header.stamp;
-          lat_lon_report.speed_ref = (float)ptr->speed_ref / 256.0f;
+          lat_lon_report.speed_ref = (float)ptr->speed_ref * 0.01f;
           lat_lon_report.accel_ref = (float)ptr->accel_ref * 0.05f;
-          lat_lon_report.speed_meas = (float)ptr->speed_meas / 256.0f;
+          lat_lon_report.speed_meas = (float)ptr->speed_meas * 0.01f;
           lat_lon_report.accel_meas = (float)ptr->accel_meas * 0.05f;
           lat_lon_report.max_steering_angle = (float)ptr->max_steering_angle * 5.0f;
           lat_lon_report.max_steering_vel = (float)ptr->max_steering_vel * 8.0f;
