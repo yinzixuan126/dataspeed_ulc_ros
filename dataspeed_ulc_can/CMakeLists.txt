@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(dataspeed_ulc_ros)
+project(dataspeed_ulc_can)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   nodelet
   can_msgs
-  dataspeed_dbw_msgs
+  dataspeed_ulc_msgs
 )
 
 if (NOT "${CMAKE_CXX_STANDARD_COMPUTED_DEFAULT}")

@@ -3,7 +3,7 @@
 
 #include "UlcNode.h"
 
-namespace dataspeed_ulc_ros
+namespace dataspeed_ulc_can
 {
 
 class UlcNodelet : public nodelet::Nodelet
@@ -30,4 +30,4 @@ private:
 // Register this plugin with pluginlib.  Names must match nodelets.xml.
 //
 // parameters: class type, base class type
-PLUGINLIB_EXPORT_CLASS(dataspeed_ulc_ros::UlcNodelet, nodelet::Nodelet);
+PLUGINLIB_EXPORT_CLASS(dataspeed_ulc_can::UlcNodelet, nodelet::Nodelet);

@@ -5,11 +5,11 @@
 #include <std_msgs/Bool.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <can_msgs/Frame.h>
-#include <dataspeed_dbw_msgs/LatLonCmd.h>
-#include <dataspeed_dbw_msgs/LatLonReport.h>
-#include <dataspeed_ulc_ros/dispatch.h>
+#include <dataspeed_ulc_msgs/UlcCmd.h>
+#include <dataspeed_ulc_msgs/UlcReport.h>
+#include <dataspeed_ulc_can/dispatch.h>
 
-namespace dataspeed_ulc_ros
+namespace dataspeed_ulc_can
 {
 
 class UlcNode
@@ -19,7 +19,7 @@ public:
 private:
 
   void recvCan(const can_msgs::FrameConstPtr& msg);
-  void recvLatLonCmd(const dataspeed_dbw_msgs::LatLonCmdConstPtr& msg);
+  void recvUlcCmd(const dataspeed_ulc_msgs::UlcCmdConstPtr& msg);
   void recvTwist(const geometry_msgs::TwistConstPtr& msg);
   void recvTwistStamped(const geometry_msgs::TwistStampedConstPtr& msg);
   void recvEnable(const std_msgs::BoolConstPtr& msg);
@@ -37,7 +37,7 @@ private:
   ros::Timer config_timer_;
   ros::Timer cmd_timer_;
 
-  dataspeed_dbw_msgs::LatLonCmd lat_lon_cmd_;
+  dataspeed_ulc_msgs::UlcCmd ulc_cmd_;
   ros::Time cmd_stamp_;
   bool enable_;
 };

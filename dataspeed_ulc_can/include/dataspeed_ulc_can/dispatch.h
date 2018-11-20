@@ -1,8 +1,8 @@
-#ifndef _DATASPEED_ULC_ROS_DISPATCH_H
-#define _DATASPEED_ULC_ROS_DISPATCH_H
+#ifndef _DATASPEED_ULC_CAN_DISPATCH_H
+#define _DATASPEED_ULC_CAN_DISPATCH_H
 #include <stdint.h>
 
-namespace dataspeed_ulc_ros
+namespace dataspeed_ulc_can
 {
 
 typedef struct {
@@ -21,7 +21,7 @@ typedef struct {
   uint8_t                  :8;
   uint8_t                  :8;
   uint8_t wdc;
-} MsgLatLonCmd;
+} MsgUlcCmd;
 
 typedef struct {
     uint8_t linear_accel;   // 0.02 m/s^2, 0 to 5.1 m/s^2
@@ -32,7 +32,7 @@ typedef struct {
     uint8_t :8;
     uint8_t :8;
     uint8_t wdc;
-} MsgLatLonConfig;
+} MsgUlcCfg;
 
 typedef struct {
   int16_t speed_ref :14; // 0.01 m/s,
@@ -48,22 +48,22 @@ typedef struct {
   uint8_t max_steering_vel :6; //  8 deg/s
   uint8_t steer_preempted: 1;
   uint8_t speed_preempted: 1;
-} MsgLatLonReport;
+} MsgUlcReport;
 
 #define BUILD_ASSERT(cond) do { (void) sizeof(char [1 - 2*!(cond)]); } while(0)
 static void dispatchAssertSizes() {
-  BUILD_ASSERT(8 == sizeof(MsgLatLonCmd));
-  BUILD_ASSERT(8 == sizeof(MsgLatLonConfig));
-  BUILD_ASSERT(8 == sizeof(MsgLatLonReport));
+  BUILD_ASSERT(8 == sizeof(MsgUlcCmd));
+  BUILD_ASSERT(8 == sizeof(MsgUlcCfg));
+  BUILD_ASSERT(8 == sizeof(MsgUlcReport));
 }
 #undef BUILD_ASSERT
 
 enum {
-  ID_LAT_LON_CMD            = 0x076,
-  ID_LAT_LON_CONFIG         = 0x077,
-  ID_LAT_LON_REPORT         = 0x078,
+  ID_ULC_CMD            = 0x076,
+  ID_ULC_CONFIG         = 0x077,
+  ID_ULC_REPORT         = 0x078,
 };
 
-} // namespace dataspeed_ulc_ros
+} // namespace dataspeed_ulc_can
 
-#endif // _DATASPEED_ULC_ROS_DISPATCH_H
+#endif // _DATASPEED_ULC_CAN_DISPATCH_H

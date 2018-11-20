@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>dataspeed_ulc_ros</name>
-  <version>0.1.0</version>
+  <name>dataspeed_ulc</name>
+  <version>0.0.0</version>
   <description>
-    Package to translate dataspeed_dbw_msgs to and from CAN messages to interact with Dataspeed ADAS Kit hardware.
+    CAN interface to the Universal Lat/Lon Controller (ULC) firmware
   </description>
 
   <license>BSD</license>
@@ -14,12 +14,11 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
-  <depend>roscpp</depend>
-  <depend>nodelet</depend>
-  <depend>can_msgs</depend>
-  <depend>dataspeed_dbw_msgs</depend>
+  <exec_depend>dataspeed_ulc_can</exec_depend>
+  <exec_depend>dataspeed_ulc_msgs</exec_depend>
 
   <export>
-    <nodelet plugin="${prefix}/nodelets.xml" />
+    <metapackage/>
   </export>
+
 </package>

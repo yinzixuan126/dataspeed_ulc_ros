@@ -8,7 +8,7 @@ int main(int argc, char **argv)
   ros::NodeHandle priv_nh("~");
 
   // create UlcNode class
-  dataspeed_ulc_ros::UlcNode n(node, priv_nh);
+  dataspeed_ulc_can::UlcNode n(node, priv_nh);
 
   // handle callbacks until shut down
   ros::spin();
