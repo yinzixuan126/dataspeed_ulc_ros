@@ -118,6 +118,9 @@ void UlcNode::cmdTimerCb(const ros::TimerEvent& event)
     cmd_ptr->shift_from_park = ulc_cmd_.shift_from_park;
   }
 
+  // Populate clear bit
+  cmd_ptr->clear = ulc_cmd_.clear;
+
   // Populate speed command with range check
   if (ulc_cmd_.linear_velocity < (INT16_MIN * 0.0025f)) {
     cmd_ptr->linear_velocity = INT16_MIN;
