@@ -4,6 +4,7 @@ bool steering_enabled
 bool speed_preempted
 bool steering_preempted
 bool override_latched
+bool timeout
 
 uint8 YAW_RATE_MODE=0
 uint8 CURVATURE_MODE=1

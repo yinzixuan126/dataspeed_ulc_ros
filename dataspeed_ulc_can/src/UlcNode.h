@@ -25,7 +25,7 @@ private:
   void recvEnable(const std_msgs::BoolConstPtr& msg);
   void configTimerCb(const ros::TimerEvent& event);
   void cmdTimerCb(const ros::TimerEvent& event);
-  void setDefaultCmdFields();
+  static void processTwistInputs(const geometry_msgs::Twist& twist, dataspeed_ulc_msgs::UlcCmd& cmd);
 
   ros::Subscriber sub_lat_lon_cmd_;
   ros::Subscriber sub_twist_;

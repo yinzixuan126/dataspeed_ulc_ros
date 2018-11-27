@@ -37,34 +37,31 @@ void UlcNode::recvUlcCmd(const dataspeed_ulc_msgs::UlcCmdConstPtr& msg)
   cmd_stamp_ = ros::Time::now();
 }
 
-void UlcNode::setDefaultCmdFields()
+void UlcNode::processTwistInputs(const geometry_msgs::Twist& twist, dataspeed_ulc_msgs::UlcCmd& cmd)
 {
-  ulc_cmd_.clear = false;
-  ulc_cmd_.enable_pedals = true;
-  ulc_cmd_.enable_shifting = true;
-  ulc_cmd_.enable_steering = true;
-  ulc_cmd_.shift_from_park = false;
-  ulc_cmd_.linear_accel = 0;
-  ulc_cmd_.linear_decel = 0;
-  ulc_cmd_.angular_accel = 0;
-  ulc_cmd_.lateral_accel = 0;
+  cmd.clear = false;
+  cmd.enable_pedals = true;
+  cmd.enable_shifting = true;
+  cmd.enable_steering = true;
+  cmd.shift_from_park = false;
+  cmd.linear_accel = 0;
+  cmd.linear_decel = 0;
+  cmd.angular_accel = 0;
+  cmd.lateral_accel = 0;
+  cmd.linear_velocity = twist.linear.x;
+  cmd.yaw_command = twist.angular.z;
+  cmd.steering_mode = dataspeed_ulc_msgs::UlcCmd::YAW_RATE_MODE;
 }
 
 void UlcNode::recvTwist(const geometry_msgs::TwistConstPtr& msg)
 {
-  setDefaultCmdFields();
-  ulc_cmd_.linear_velocity = msg->linear.x;
-  ulc_cmd_.yaw_command = msg->angular.z;
-  ulc_cmd_.steering_mode = dataspeed_ulc_msgs::UlcCmd::YAW_RATE_MODE;
+  processTwistInputs(*msg, ulc_cmd_);
   cmd_stamp_ = ros::Time::now();
 }
 
 void UlcNode::recvTwistStamped(const geometry_msgs::TwistStampedConstPtr& msg)
 {
-  setDefaultCmdFields();
-  ulc_cmd_.linear_velocity = msg->twist.linear.x;
-  ulc_cmd_.yaw_command = msg->twist.angular.z;
-  ulc_cmd_.steering_mode = dataspeed_ulc_msgs::UlcCmd::YAW_RATE_MODE;
+  processTwistInputs(msg->twist, ulc_cmd_);
   cmd_stamp_ = ros::Time::now();
 }
 
@@ -77,9 +74,9 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
           const MsgUlcReport *ptr = (const MsgUlcReport *)msg->data.elems;
           dataspeed_ulc_msgs::UlcReport ulc_report;
           ulc_report.header.stamp = msg->header.stamp;
-          ulc_report.speed_ref = (float)ptr->speed_ref * 0.01f;
+          ulc_report.speed_ref = (float)ptr->speed_ref * 0.02f;
           ulc_report.accel_ref = (float)ptr->accel_ref * 0.05f;
-          ulc_report.speed_meas = (float)ptr->speed_meas * 0.01f;
+          ulc_report.speed_meas = (float)ptr->speed_meas * 0.02f;
           ulc_report.accel_meas = (float)ptr->accel_meas * 0.05f;
           ulc_report.max_steering_angle = (float)ptr->max_steering_angle * 5.0f;
           ulc_report.max_steering_vel = (float)ptr->max_steering_vel * 8.0f;
@@ -90,6 +87,7 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
           ulc_report.steering_preempted = ptr->steer_preempted;
           ulc_report.override_latched = ptr->override;
           ulc_report.steering_mode = ptr->steering_mode;
+          ulc_report.timeout = ptr->timeout;
           pub_report_.publish(ulc_report);
         }
         break;
