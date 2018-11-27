@@ -3,6 +3,34 @@
 namespace dataspeed_ulc_can
 {
 
+template <class T>
+static T overflowSaturation(float input, T limit_min, T limit_max, float scale_factor, const std::string& input_name, const std::string& units)
+{
+  if (input < (limit_min * scale_factor)) {
+    ROS_WARN("%s [%f %s] out of range -- saturating to %f %s", input_name.c_str(), input, units.c_str(), limit_min * scale_factor, units.c_str());
+    return limit_min;
+  } else if (input > (limit_max * scale_factor)) {
+    ROS_WARN("%s [%f %s] out of range -- saturating to %f %s", input_name.c_str(), input, units.c_str(), limit_max * scale_factor, units.c_str());
+    return limit_max;
+  } else {
+    return input / scale_factor;
+  }
+}
+
+static inline can_msgs::Frame generateUlcCfgMsg(const dataspeed_ulc_msgs::UlcCmd& cmd)
+{
+  can_msgs::Frame config_out;
+  config_out.id = ID_ULC_CONFIG;
+  config_out.is_extended = false;
+  config_out.dlc = sizeof(MsgUlcCfg);
+  MsgUlcCfg *config_ptr = (MsgUlcCfg *)config_out.data.elems;
+  config_ptr->linear_accel = overflowSaturation(cmd.linear_accel, 0, UINT8_MAX, 0.02f, "Linear accel limit", "m/s^2");
+  config_ptr->linear_decel = overflowSaturation(cmd.linear_decel, 0, UINT8_MAX, 0.02f, "Linear decel limit", "m/s^2");
+  config_ptr->lateral_accel = overflowSaturation(cmd.lateral_accel, 0, UINT8_MAX, 0.05f, "Lateral accel limit", "m/s^2");
+  config_ptr->angular_accel = overflowSaturation(cmd.angular_accel, 0, UINT8_MAX, 0.02f, "Angular accel limit", "rad/s^2");
+  return config_out;
+}
+
 UlcNode::UlcNode(ros::NodeHandle n, ros::NodeHandle pn) :
   enable_(false)
 {
@@ -33,11 +61,19 @@ void UlcNode::recvEnable(const std_msgs::BoolConstPtr& msg)
 
 void UlcNode::recvUlcCmd(const dataspeed_ulc_msgs::UlcCmdConstPtr& msg)
 {
+  // If acceleration limits change, send new ULC config message immediately
+  if ((msg->linear_accel != ulc_cmd_.linear_accel)   || (msg->linear_decel != ulc_cmd_.linear_decel)
+   || (msg->lateral_accel != ulc_cmd_.lateral_accel) || (msg->angular_accel != ulc_cmd_.angular_accel))
+  {
+    can_msgs::Frame config_out = generateUlcCfgMsg(*msg);
+    pub_can_.publish(config_out);
+  }
+
   ulc_cmd_ = *msg;
   cmd_stamp_ = ros::Time::now();
 }
 
-void UlcNode::processTwistInputs(const geometry_msgs::Twist& twist, dataspeed_ulc_msgs::UlcCmd& cmd)
+void UlcNode::processTwistInput(const geometry_msgs::Twist& twist, dataspeed_ulc_msgs::UlcCmd& cmd)
 {
   cmd.clear = false;
   cmd.enable_pedals = true;
@@ -55,13 +91,13 @@ void UlcNode::processTwistInputs(const geometry_msgs::Twist& twist, dataspeed_ul
 
 void UlcNode::recvTwist(const geometry_msgs::TwistConstPtr& msg)
 {
-  processTwistInputs(*msg, ulc_cmd_);
+  processTwistInput(*msg, ulc_cmd_);
   cmd_stamp_ = ros::Time::now();
 }
 
 void UlcNode::recvTwistStamped(const geometry_msgs::TwistStampedConstPtr& msg)
 {
-  processTwistInputs(msg->twist, ulc_cmd_);
+  processTwistInput(msg->twist, ulc_cmd_);
   cmd_stamp_ = ros::Time::now();
 }
 
@@ -92,20 +128,6 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
         }
         break;
     }
-  }
-}
-
-template <class T>
-static T overflowSaturation(float input, T limit_min, T limit_max, float scale_factor, const std::string& input_name, const std::string& units)
-{
-  if (input < (limit_min * scale_factor)) {
-    ROS_WARN("%s [%f %s] out of range -- saturating to %f %s", input_name.c_str(), input, units.c_str(), limit_min * scale_factor, units.c_str());
-    return limit_min;
-  } else if (input > (limit_max * scale_factor)) {
-    ROS_WARN("%s [%f %s] out of range -- saturating to %f %s", input_name.c_str(), input, units.c_str(), limit_max * scale_factor, units.c_str());
-    return limit_max;
-  } else {
-    return input / scale_factor;
   }
 }
 
@@ -151,15 +173,7 @@ void UlcNode::configTimerCb(const ros::TimerEvent& event)
     return;
   }
 
-  can_msgs::Frame config_out;
-  config_out.id = ID_ULC_CONFIG;
-  config_out.is_extended = false;
-  config_out.dlc = sizeof(MsgUlcCfg);
-  MsgUlcCfg *config_ptr = (MsgUlcCfg *)config_out.data.elems;
-  config_ptr->linear_accel = overflowSaturation(ulc_cmd_.linear_accel, 0, UINT8_MAX, 0.02f, "Linear accel limit", "m/s^2");
-  config_ptr->linear_decel = overflowSaturation(ulc_cmd_.linear_decel, 0, UINT8_MAX, 0.02f, "Linear decel limit", "m/s^2");
-  config_ptr->lateral_accel = overflowSaturation(ulc_cmd_.lateral_accel, 0, UINT8_MAX, 0.05f, "Lateral accel limit", "m/s^2");
-  config_ptr->angular_accel = overflowSaturation(ulc_cmd_.angular_accel, 0, UINT8_MAX, 0.02f, "Angular accel limit", "rad/s^2");
+  can_msgs::Frame config_out = generateUlcCfgMsg(ulc_cmd_);
   pub_can_.publish(config_out);
 }
 
