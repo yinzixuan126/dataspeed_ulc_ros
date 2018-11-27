@@ -95,6 +95,20 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
   }
 }
 
+template <class T>
+static T overflowSaturation(float input, T limit_min, T limit_max, float scale_factor, const std::string& input_name, const std::string& units)
+{
+  if (input < (limit_min * scale_factor)) {
+    ROS_WARN("%s [%f %s] out of range -- saturating to %f %s", input_name.c_str(), input, units.c_str(), limit_min * scale_factor, units.c_str());
+    return limit_min;
+  } else if (input > (limit_max * scale_factor)) {
+    ROS_WARN("%s [%f %s] out of range -- saturating to %f %s", input_name.c_str(), input, units.c_str(), limit_max * scale_factor, units.c_str());
+    return limit_max;
+  } else {
+    return input / scale_factor;
+  }
+}
+
 void UlcNode::cmdTimerCb(const ros::TimerEvent& event)
 {
   if ((event.current_real - cmd_stamp_).toSec() > 0.1) {
@@ -116,42 +130,13 @@ void UlcNode::cmdTimerCb(const ros::TimerEvent& event)
     cmd_ptr->shift_from_park = ulc_cmd_.shift_from_park;
   }
 
-  // Populate clear bit
   cmd_ptr->clear = ulc_cmd_.clear;
-
-  // Populate speed command with range check
-  if (ulc_cmd_.linear_velocity < (INT16_MIN * 0.0025f)) {
-    cmd_ptr->linear_velocity = INT16_MIN;
-    ROS_WARN_THROTTLE(1.0, "ULC command speed [%f m/s] out of range -- saturating to %f m/s", ulc_cmd_.linear_velocity, INT16_MIN * 0.0025f);
-  } else if (ulc_cmd_.linear_velocity > (INT16_MAX * 0.0025f)) {
-    cmd_ptr->linear_velocity = INT16_MAX;
-    ROS_WARN_THROTTLE(1.0, "ULC command speed [%f m/s] out of range -- saturating to %f m/s", ulc_cmd_.linear_velocity, INT16_MAX * 0.0025f);
-  } else {
-    cmd_ptr->linear_velocity = (int16_t) (ulc_cmd_.linear_velocity / 0.0025f);
-  }
-
-  // Populate yaw command with range check
+  cmd_ptr->linear_velocity = overflowSaturation(ulc_cmd_.linear_velocity, INT16_MIN, INT16_MAX, 0.0025f, "ULC command speed", "m/s");
   cmd_ptr->steering_mode = ulc_cmd_.steering_mode;
   if (ulc_cmd_.steering_mode == dataspeed_ulc_msgs::UlcCmd::YAW_RATE_MODE) {
-    if (ulc_cmd_.yaw_command < (INT16_MIN * 0.00025f)) {
-      cmd_ptr->yaw_command = INT16_MIN;
-      ROS_WARN_THROTTLE(1.0, "ULC yaw rate command [%f rad/s] out of range -- saturating to %f rad/s", ulc_cmd_.yaw_command, INT16_MIN * 0.00025f);
-    } else if (ulc_cmd_.yaw_command > (INT16_MAX * 0.00025f)) {
-      cmd_ptr->yaw_command = INT16_MAX;
-      ROS_WARN_THROTTLE(1.0, "ULC yaw rate command [%f rad/s] out of range -- saturating to %f rad/s", ulc_cmd_.yaw_command, INT16_MAX * 0.00025f);
-    } else {
-      cmd_ptr->yaw_command = (int16_t)(ulc_cmd_.yaw_command / 0.00025f);
-    }
+    cmd_ptr->yaw_command = overflowSaturation(ulc_cmd_.yaw_command, INT16_MIN, INT16_MAX, 0.00025f, "ULC yaw rate command", "rad/s");
   } else if (ulc_cmd_.steering_mode == dataspeed_ulc_msgs::UlcCmd::CURVATURE_MODE) {
-    if (ulc_cmd_.yaw_command < (INT16_MIN * 0.0000061f)) {
-      cmd_ptr->yaw_command = INT16_MIN;
-      ROS_WARN_THROTTLE(1.0, "ULC curvature command [%f 1/m] out of range -- saturating to %f 1/m", ulc_cmd_.yaw_command, INT16_MIN * 0.0000061f);
-    } else if (ulc_cmd_.yaw_command > (INT16_MAX * 0.0000061f)) {
-      cmd_ptr->yaw_command = INT16_MAX;
-      ROS_WARN_THROTTLE(1.0, "ULC curvature command [%f 1/m] out of range -- saturating to %f 1/m", ulc_cmd_.yaw_command, INT16_MAX * 0.0000061f);
-    } else {
-      cmd_ptr->yaw_command = (int16_t)(ulc_cmd_.yaw_command / 0.0000061f);
-    }
+    cmd_ptr->yaw_command = overflowSaturation(ulc_cmd_.yaw_command, INT16_MIN, INT16_MAX, 0.0000061f, "ULC curvature command", "1/m");
   } else {
     cmd_ptr->yaw_command = 0;
     ROS_WARN_THROTTLE(1.0, "Unsupported ULC steering control mode [%d]", ulc_cmd_.steering_mode);
@@ -171,51 +156,10 @@ void UlcNode::configTimerCb(const ros::TimerEvent& event)
   config_out.is_extended = false;
   config_out.dlc = sizeof(MsgUlcCfg);
   MsgUlcCfg *config_ptr = (MsgUlcCfg *)config_out.data.elems;
-
-  // Populate linear accel limit with range check and saturation
-  if (ulc_cmd_.linear_accel < 0.0) {
-    config_ptr->linear_accel = 0;
-    ROS_WARN_THROTTLE(1.0, "Linear accel limit [%f m/s^2] out of range -- saturating to 0", ulc_cmd_.linear_accel);
-  } else if (ulc_cmd_.linear_accel >= (UINT8_MAX * 0.02f)) {
-    config_ptr->linear_accel = UINT8_MAX;
-    ROS_WARN_THROTTLE(1.0, "Linear accel limit [%f m/s^2] out of range -- saturating to %f m/s^2", ulc_cmd_.linear_accel, UINT8_MAX * 0.02f);
-  } else {
-    config_ptr->linear_accel = (uint8_t)(ulc_cmd_.linear_accel / 0.02f);
-  }
-
-  // Populate linear decel limit with range check and saturation
-  if (ulc_cmd_.linear_decel < 0.0) {
-    config_ptr->linear_decel = 0;
-    ROS_WARN_THROTTLE(1.0, "Linear decel limit [%f m/s^2] out of range -- saturating to 0", ulc_cmd_.linear_decel);
-  } else if (ulc_cmd_.linear_decel >= (UINT8_MAX * 0.02f)) {
-    config_ptr->linear_decel = UINT8_MAX;
-    ROS_WARN_THROTTLE(1.0, "Linear decel limit [%f m/s^2] out of range -- saturating to %f m/s^2", ulc_cmd_.linear_decel, UINT8_MAX * 0.02f);
-  } else {
-    config_ptr->linear_decel = (uint8_t)(ulc_cmd_.linear_decel / 0.02f);
-  }
-
-  // Populate angular accel limit with range check and saturation
-  if (ulc_cmd_.angular_accel < 0.0) {
-    config_ptr->angular_accel = 0;
-    ROS_WARN_THROTTLE(1.0, "Angular accel limit [%f rad/s^2] out of range -- saturating to 0", ulc_cmd_.angular_accel);
-  } else if (ulc_cmd_.angular_accel >= (UINT8_MAX * 0.02f)) {
-    config_ptr->angular_accel = UINT8_MAX;
-    ROS_WARN_THROTTLE(1.0, "Angular accel limit [%f rad/s^2] out of range -- saturating to %f rad/s^2", ulc_cmd_.angular_accel, UINT8_MAX * 0.02f);
-  } else {
-    config_ptr->angular_accel = (uint8_t)(ulc_cmd_.angular_accel / 0.02f);
-  }
-
-  // Populate lateral accel limit with range check and saturation
-  if (ulc_cmd_.lateral_accel < 0.0) {
-    config_ptr->lateral_accel = 0;
-    ROS_WARN_THROTTLE(1.0, "Lateral accel limit [%f m/s^2] out of range -- saturating to 0", ulc_cmd_.lateral_accel);
-  } else if (ulc_cmd_.lateral_accel >= (UINT8_MAX * 0.05f)) {
-    config_ptr->lateral_accel = UINT8_MAX;
-    ROS_WARN_THROTTLE(1.0, "Lateral accel limit [%f m/s^2] out of range -- saturating to %f m/s^2", ulc_cmd_.lateral_accel, UINT8_MAX * 0.05f);
-  } else {
-    config_ptr->lateral_accel = (uint8_t)(ulc_cmd_.lateral_accel / 0.05f);
-  }
-
+  config_ptr->linear_accel = overflowSaturation(ulc_cmd_.linear_accel, 0, UINT8_MAX, 0.02f, "Linear accel limit", "m/s^2");
+  config_ptr->linear_decel = overflowSaturation(ulc_cmd_.linear_decel, 0, UINT8_MAX, 0.02f, "Linear decel limit", "m/s^2");
+  config_ptr->lateral_accel = overflowSaturation(ulc_cmd_.lateral_accel, 0, UINT8_MAX, 0.05f, "Lateral accel limit", "m/s^2");
+  config_ptr->angular_accel = overflowSaturation(ulc_cmd_.angular_accel, 0, UINT8_MAX, 0.02f, "Angular accel limit", "rad/s^2");
   pub_can_.publish(config_out);
 }
 
