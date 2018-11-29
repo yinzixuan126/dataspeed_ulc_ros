@@ -24,7 +24,7 @@ private:
   void recvTwistStamped(const geometry_msgs::TwistStampedConstPtr& msg);
   void recvEnable(const std_msgs::BoolConstPtr& msg);
   void configTimerCb(const ros::TimerEvent& event);
-  void cmdTimerCb(const ros::TimerEvent& event);
+  void sendCmdMsg();
   static void processTwistInput(const geometry_msgs::Twist& twist, dataspeed_ulc_msgs::UlcCmd& cmd);
 
   ros::Subscriber sub_lat_lon_cmd_;
@@ -35,7 +35,6 @@ private:
   ros::Publisher pub_report_;
   ros::Publisher pub_can_;
   ros::Timer config_timer_;
-  ros::Timer cmd_timer_;
 
   dataspeed_ulc_msgs::UlcCmd ulc_cmd_;
   ros::Time cmd_stamp_;

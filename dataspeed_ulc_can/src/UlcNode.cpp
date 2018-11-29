@@ -4,7 +4,7 @@ namespace dataspeed_ulc_can
 {
 
 template <class T>
-static T overflowSaturation(float input, T limit_min, T limit_max, float scale_factor, const std::string& input_name, const std::string& units)
+static T overflowSaturation(double input, T limit_min, T limit_max, double scale_factor, const std::string& input_name, const std::string& units)
 {
   if (input < (limit_min * scale_factor)) {
     ROS_WARN("%s [%f %s] out of range -- saturating to %f %s", input_name.c_str(), input, units.c_str(), limit_min * scale_factor, units.c_str());
@@ -24,11 +24,40 @@ static inline can_msgs::Frame generateUlcCfgMsg(const dataspeed_ulc_msgs::UlcCmd
   config_out.is_extended = false;
   config_out.dlc = sizeof(MsgUlcCfg);
   MsgUlcCfg *config_ptr = (MsgUlcCfg *)config_out.data.elems;
-  config_ptr->linear_accel = overflowSaturation(cmd.linear_accel, 0, UINT8_MAX, 0.02f, "Linear accel limit", "m/s^2");
-  config_ptr->linear_decel = overflowSaturation(cmd.linear_decel, 0, UINT8_MAX, 0.02f, "Linear decel limit", "m/s^2");
-  config_ptr->lateral_accel = overflowSaturation(cmd.lateral_accel, 0, UINT8_MAX, 0.05f, "Lateral accel limit", "m/s^2");
-  config_ptr->angular_accel = overflowSaturation(cmd.angular_accel, 0, UINT8_MAX, 0.02f, "Angular accel limit", "rad/s^2");
+  config_ptr->linear_accel = overflowSaturation(cmd.linear_accel, 0, UINT8_MAX, 0.02, "Linear accel limit", "m/s^2");
+  config_ptr->linear_decel = overflowSaturation(cmd.linear_decel, 0, UINT8_MAX, 0.02, "Linear decel limit", "m/s^2");
+  config_ptr->lateral_accel = overflowSaturation(cmd.lateral_accel, 0, UINT8_MAX, 0.05, "Lateral accel limit", "m/s^2");
+  config_ptr->angular_accel = overflowSaturation(cmd.angular_accel, 0, UINT8_MAX, 0.02, "Angular accel limit", "rad/s^2");
   return config_out;
+}
+
+static inline bool invalidInputs(const dataspeed_ulc_msgs::UlcCmd& cmd)
+{
+  if (std::isnan(cmd.linear_velocity)) {
+    ROS_WARN("NaN input detected on speed input");
+    return true;
+  }
+  if (std::isnan(cmd.yaw_command)) {
+    ROS_WARN("NaN input detected on yaw command input");
+    return true;
+  }
+  if (std::isnan(cmd.linear_accel)) {
+    ROS_WARN("NaN input detected on linear accel input");
+    return true;
+  }
+  if (std::isnan(cmd.linear_decel)) {
+    ROS_WARN("NaN input detected on linear decel input");
+    return true;
+  }
+  if (std::isnan(cmd.lateral_accel)) {
+    ROS_WARN("NaN input detected on lateral accel input");
+    return true;
+  }
+  if (std::isnan(cmd.angular_accel)) {
+    ROS_WARN("NaN input detected on angular accel input");
+    return true;
+  }
+  return false;
 }
 
 UlcNode::UlcNode(ros::NodeHandle n, ros::NodeHandle pn) :
@@ -51,7 +80,6 @@ UlcNode::UlcNode(ros::NodeHandle n, ros::NodeHandle pn) :
     config_frequency = 5.0;
   }
   config_timer_ = n.createTimer(ros::Duration(1.0 / config_frequency), &UlcNode::configTimerCb, this);
-  cmd_timer_ = n.createTimer(ros::Duration(0.02), &UlcNode::cmdTimerCb, this);
 }
 
 void UlcNode::recvEnable(const std_msgs::BoolConstPtr& msg)
@@ -71,6 +99,7 @@ void UlcNode::recvUlcCmd(const dataspeed_ulc_msgs::UlcCmdConstPtr& msg)
 
   ulc_cmd_ = *msg;
   cmd_stamp_ = ros::Time::now();
+  sendCmdMsg();
 }
 
 void UlcNode::processTwistInput(const geometry_msgs::Twist& twist, dataspeed_ulc_msgs::UlcCmd& cmd)
@@ -93,12 +122,14 @@ void UlcNode::recvTwist(const geometry_msgs::TwistConstPtr& msg)
 {
   processTwistInput(*msg, ulc_cmd_);
   cmd_stamp_ = ros::Time::now();
+  sendCmdMsg();
 }
 
 void UlcNode::recvTwistStamped(const geometry_msgs::TwistStampedConstPtr& msg)
 {
   processTwistInput(msg->twist, ulc_cmd_);
   cmd_stamp_ = ros::Time::now();
+  sendCmdMsg();
 }
 
 void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
@@ -116,11 +147,11 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
           ulc_report.accel_meas = (float)ptr->accel_meas * 0.05f;
           ulc_report.max_steering_angle = (float)ptr->max_steering_angle * 5.0f;
           ulc_report.max_steering_vel = (float)ptr->max_steering_vel * 8.0f;
-          ulc_report.speed_enabled = ptr->speed_enabled;
+          ulc_report.pedals_enabled = ptr->pedals_enabled;
           ulc_report.steering_enabled = ptr->steering_enabled;
-          ulc_report.reference_source = ptr->reference_source;
+          ulc_report.tracking_mode = ptr->tracking_mode;
           ulc_report.speed_preempted = ptr->speed_preempted;
-          ulc_report.steering_preempted = ptr->steer_preempted;
+          ulc_report.steering_preempted = ptr->steering_preempted;
           ulc_report.override_latched = ptr->override;
           ulc_report.steering_mode = ptr->steering_mode;
           ulc_report.timeout = ptr->timeout;
@@ -131,9 +162,10 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
   }
 }
 
-void UlcNode::cmdTimerCb(const ros::TimerEvent& event)
+void UlcNode::sendCmdMsg()
 {
-  if ((event.current_real - cmd_stamp_).toSec() > 0.1) {
+  if (invalidInputs(ulc_cmd_)) {
+    cmd_stamp_ = ros::Time(0);
     return;
   }
 
@@ -153,15 +185,17 @@ void UlcNode::cmdTimerCb(const ros::TimerEvent& event)
   }
 
   cmd_ptr->clear = ulc_cmd_.clear;
-  cmd_ptr->linear_velocity = overflowSaturation(ulc_cmd_.linear_velocity, INT16_MIN, INT16_MAX, 0.0025f, "ULC command speed", "m/s");
+  cmd_ptr->linear_velocity = overflowSaturation(ulc_cmd_.linear_velocity, INT16_MIN, INT16_MAX, 0.0025, "ULC command speed", "m/s");
   cmd_ptr->steering_mode = ulc_cmd_.steering_mode;
   if (ulc_cmd_.steering_mode == dataspeed_ulc_msgs::UlcCmd::YAW_RATE_MODE) {
-    cmd_ptr->yaw_command = overflowSaturation(ulc_cmd_.yaw_command, INT16_MIN, INT16_MAX, 0.00025f, "ULC yaw rate command", "rad/s");
+    cmd_ptr->yaw_command = overflowSaturation(ulc_cmd_.yaw_command, INT16_MIN, INT16_MAX, 0.00025, "ULC yaw rate command", "rad/s");
   } else if (ulc_cmd_.steering_mode == dataspeed_ulc_msgs::UlcCmd::CURVATURE_MODE) {
-    cmd_ptr->yaw_command = overflowSaturation(ulc_cmd_.yaw_command, INT16_MIN, INT16_MAX, 0.0000061f, "ULC curvature command", "1/m");
+    cmd_ptr->yaw_command = overflowSaturation(ulc_cmd_.yaw_command, INT16_MIN, INT16_MAX, 0.0000061, "ULC curvature command", "1/m");
   } else {
     cmd_ptr->yaw_command = 0;
     ROS_WARN_THROTTLE(1.0, "Unsupported ULC steering control mode [%d]", ulc_cmd_.steering_mode);
+    cmd_stamp_ = ros::Time(0);
+    return;
   }
 
   pub_can_.publish(cmd_out);
@@ -172,7 +206,6 @@ void UlcNode::configTimerCb(const ros::TimerEvent& event)
   if ((event.current_real - cmd_stamp_).toSec() > 0.1) {
     return;
   }
-
   can_msgs::Frame config_out = generateUlcCfgMsg(ulc_cmd_);
   pub_can_.publish(config_out);
 }

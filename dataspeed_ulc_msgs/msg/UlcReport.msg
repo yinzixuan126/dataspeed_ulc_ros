@@ -1,5 +1,5 @@
 std_msgs/Header header
-bool speed_enabled
+bool pedals_enabled
 bool steering_enabled
 bool speed_preempted
 bool steering_preempted
@@ -12,7 +12,7 @@ uint8 steering_mode
 
 uint8 LOOSE_TRACKING_MODE=0
 uint8 TIGHT_TRACKING_MODE=1
-uint8 reference_source
+uint8 tracking_mode
 
 float32 speed_ref
 float32 speed_meas

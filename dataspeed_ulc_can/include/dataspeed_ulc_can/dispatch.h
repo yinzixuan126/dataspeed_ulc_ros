@@ -37,8 +37,8 @@ typedef struct {
 typedef struct {
   int16_t speed_ref :13; // 0.02 m/s,
   uint16_t timeout :1;
-  uint16_t speed_enabled :1;
-  uint16_t reference_source :1;
+  uint16_t pedals_enabled :1;
+  uint16_t tracking_mode :1;
   int16_t speed_meas :13; // 0.02 m/s
   uint16_t override :1;
   uint16_t steering_enabled :1;
@@ -48,7 +48,7 @@ typedef struct {
   uint8_t max_steering_angle: 7; // 5 deg
   uint8_t:1;
   uint8_t max_steering_vel :6; //  8 deg/s
-  uint8_t steer_preempted: 1;
+  uint8_t steering_preempted: 1;
   uint8_t speed_preempted: 1;
 } MsgUlcReport;
 
