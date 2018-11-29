@@ -130,8 +130,7 @@ TEST(ULCNode, cfgTiming)
   ros::WallTime t_end = ros::WallTime::now() + ros::WallDuration(1.0);
   while ((t_end - ros::WallTime::now()).toSec() > 0) {
     g_pub_ulc_cmd.publish(g_ulc_cmd);
-    NOMINAL_CMD_PERIOD.sleep();
-    EXPECT_TRUE(waitForMsg(NOMINAL_CFG_PERIOD - NOMINAL_CMD_PERIOD, g_msg_ulc_cfg));
+    EXPECT_TRUE(waitForMsg(ros::WallDuration(1.0), g_msg_ulc_cfg));
     if (last_cfg_stamp == ros::WallTime(0)) {
       last_cfg_stamp = g_msg_ulc_cfg.stamp();
       continue;
@@ -518,7 +517,7 @@ int main(int argc, char **argv) {
   g_pub_twist = n->advertise<geometry_msgs::Twist>("cmd_vel", 1);
   g_pub_twist_stamped = n->advertise<geometry_msgs::TwistStamped>("cmd_vel_stamped", 1);
   g_pub_can = n->advertise<can_msgs::Frame>("can_rx", 10);
-  g_cfg_freq = pn->param("config_frequency", g_cfg_freq, 5.0);
+  pn->param("config_frequency", g_cfg_freq, 5.0);
 
   // Setup Spinner
   ros::AsyncSpinner spinner(3);
