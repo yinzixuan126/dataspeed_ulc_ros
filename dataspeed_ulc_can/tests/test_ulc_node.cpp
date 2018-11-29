@@ -44,7 +44,6 @@ ros::Publisher g_pub_twist_stamped;
 ros::Publisher g_pub_can;
 ros::Subscriber g_sub_can;
 ros::Subscriber g_sub_report;
-ros::WallDuration NOMINAL_CMD_PERIOD(0.02);
 
 void recvCan(const can_msgs::FrameConstPtr& msg)
 {
@@ -117,7 +116,6 @@ TEST(ULCNode, topics)
 TEST(ULCNode, cfgTiming)
 {
   g_ulc_cmd = dataspeed_ulc_msgs::UlcCmd();
-  ros::WallDuration NOMINAL_CFG_PERIOD(1.0 / g_cfg_freq + 0.002);
 
   g_ulc_cmd.linear_accel = 1.0;
   g_ulc_cmd.linear_decel = 1.0;
@@ -136,8 +134,9 @@ TEST(ULCNode, cfgTiming)
       continue;
     }
 
-    ASSERT_NEAR(g_msg_ulc_cfg.stamp().toSec(), last_cfg_stamp.toSec(), 1.0 / g_cfg_freq + 0.002);
+    ASSERT_NEAR(g_msg_ulc_cfg.stamp().toSec(), last_cfg_stamp.toSec(), 1.0 / g_cfg_freq + 0.005);
     last_cfg_stamp = g_msg_ulc_cfg.stamp();
+    ros::WallDuration(0.02).sleep();
   }
 
   // Change accel limits and make sure config CAN messages are sent immediately
