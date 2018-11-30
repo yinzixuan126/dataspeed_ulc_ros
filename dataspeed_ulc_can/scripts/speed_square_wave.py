@@ -1,13 +1,13 @@
 #! /usr/bin/env python
 import rospy
-from ulc_speed import UlcSpeed
+from speed import Speed
 
 
-class UlcSpeedSquareWave(UlcSpeed):
+class SpeedSquareWave(Speed):
 
     def __init__(self):
-        rospy.init_node('ulc_speed_square_wave')
-        super(UlcSpeedSquareWave, self).__init__()
+        rospy.init_node('speed_square_wave')
+        super(SpeedSquareWave, self).__init__()
 
     def timer_callback(self, event):
         if self.enabled:
@@ -32,7 +32,7 @@ class UlcSpeedSquareWave(UlcSpeed):
 
 if __name__ == '__main__':
     try:
-        node_instance = UlcSpeedSquareWave()
+        node_instance = SpeedSquareWave()
         rospy.spin()
     except rospy.ROSInterruptException:
         pass

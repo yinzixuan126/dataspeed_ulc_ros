@@ -4,8 +4,8 @@ from std_msgs.msg import Bool
 from dataspeed_ulc_msgs.msg import UlcCmd
 
 
-# This is a base class that is inherited by UlcSpeedSquareWave and UlcSpeedSineWave
-class UlcSpeed(object):
+# This is a base class that is inherited by SpeedSquareWave and SpeedSineWave
+class Speed(object):
 
     def __init__(self):
         rospy.Timer(rospy.Duration(0.02), self.timer_callback)

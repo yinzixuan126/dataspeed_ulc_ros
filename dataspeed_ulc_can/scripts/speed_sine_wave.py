@@ -1,17 +1,17 @@
 #! /usr/bin/env python
 import rospy
 import math
-from ulc_speed import UlcSpeed
+from speed import Speed
 from dataspeed_ulc_msgs.msg import UlcReport
 
 
-class UlcSpeedSineWave(UlcSpeed):
+class SpeedSineWave(Speed):
     APPROACHING = 0
     TRACKING = 1
 
     def __init__(self):
-        rospy.init_node('ulc_speed_sine_wave')
-        super(UlcSpeedSineWave, self).__init__()
+        rospy.init_node('speed_sine_wave')
+        super(SpeedSineWave, self).__init__()
 
         self.speed_meas = 0
         self.reached_target_stamp = -1
@@ -52,7 +52,7 @@ class UlcSpeedSineWave(UlcSpeed):
 
 if __name__ == '__main__':
     try:
-        node_instance = UlcSpeedSineWave()
+        node_instance = SpeedSineWave()
         rospy.spin()
     except rospy.ROSInterruptException:
         pass
