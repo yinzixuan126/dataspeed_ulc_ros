@@ -2,8 +2,7 @@
 import rospy
 import math
 from ulc_speed import UlcSpeed
-import dbw_mkz_msgs.msg
-import dbw_fca_msgs.msg
+from dataspeed_ulc_msgs.msg import UlcReport
 
 
 class UlcSpeedSineWave(UlcSpeed):
@@ -12,33 +11,12 @@ class UlcSpeedSineWave(UlcSpeed):
 
     def __init__(self):
         rospy.init_node('ulc_speed_sine_wave')
+        super(UlcSpeedSineWave, self).__init__()
 
         self.speed_meas = 0
         self.reached_target_stamp = -1
         self.state = self.APPROACHING
-
-        # Wait for /vehicle/steering_report topic to be advertised so its
-        # message type can be determined between dbw_mkz_msgs/SteeringReport
-        # and dbw_fca_msgs/SteeringReport
-        while not rospy.is_shutdown():
-            found_steering_report = False
-            for topic in rospy.get_published_topics('vehicle'):
-                if topic[0] == '/vehicle/steering_report':
-                    rospy.Subscriber(
-                        name=topic[0],
-                        data_class=eval(topic[1].split('/')[0] + '.msg.SteeringReport'),
-                        callback=self.recv_steering_report
-                    )
-                    found_steering_report = True
-                    rospy.loginfo('Found steering report topic with message type %s' % topic[1])
-                    break
-            if found_steering_report:
-                break
-            else:
-                rospy.loginfo_once('Waiting for /vehicle/steering_report...')
-            rospy.sleep(0.1)
-
-        super(UlcSpeedSineWave, self).__init__()
+        rospy.Subscriber('/vehicle/ulc_report', UlcReport, self.recv_report)
 
     def timer_callback(self, event):
 
@@ -68,8 +46,8 @@ class UlcSpeedSineWave(UlcSpeed):
         if self.v1 == 0 and self.v2 == 0:
             rospy.logwarn_throttle(1.0, 'both speed targets are zero')
 
-    def recv_steering_report(self, msg):
-        self.speed_meas = msg.speed
+    def recv_report(self, msg):
+        self.speed_meas = msg.speed_meas
 
 
 if __name__ == '__main__':
