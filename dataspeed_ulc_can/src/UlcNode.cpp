@@ -17,20 +17,6 @@ static T overflowSaturation(double input, T limit_min, T limit_max, double scale
   }
 }
 
-static inline can_msgs::Frame generateUlcCfgMsg(const dataspeed_ulc_msgs::UlcCmd& cmd)
-{
-  can_msgs::Frame msg;
-  msg.id = ID_ULC_CONFIG;
-  msg.is_extended = false;
-  msg.dlc = sizeof(MsgUlcCfg);
-  MsgUlcCfg *ptr = (MsgUlcCfg *)msg.data.elems;
-  ptr->linear_accel  = overflowSaturation(cmd.linear_accel,  0, UINT8_MAX, 0.02, "Linear accel limit",  "m/s^2");
-  ptr->linear_decel  = overflowSaturation(cmd.linear_decel,  0, UINT8_MAX, 0.02, "Linear decel limit",  "m/s^2");
-  ptr->lateral_accel = overflowSaturation(cmd.lateral_accel, 0, UINT8_MAX, 0.05, "Lateral accel limit", "m/s^2");
-  ptr->angular_accel = overflowSaturation(cmd.angular_accel, 0, UINT8_MAX, 0.02, "Angular accel limit", "rad/s^2");
-  return msg;
-}
-
 static inline bool validInputs(const dataspeed_ulc_msgs::UlcCmd& cmd)
 {
   bool valid = true;
@@ -70,12 +56,12 @@ UlcNode::UlcNode(ros::NodeHandle n, ros::NodeHandle pn) :
 
   // Setup subscribers
   sub_can_ = n.subscribe<can_msgs::Frame>("can_rx", 100, &UlcNode::recvCan, this);
-  sub_lat_lon_cmd_ = n.subscribe<dataspeed_ulc_msgs::UlcCmd>("ulc_cmd", 1, &UlcNode::recvUlcCmd, this);
+  sub_cmd_ = n.subscribe<dataspeed_ulc_msgs::UlcCmd>("ulc_cmd", 1, &UlcNode::recvUlcCmd, this);
   sub_twist_ = n.subscribe<geometry_msgs::Twist>("cmd_vel", 1, &UlcNode::recvTwist, this);
   sub_twist_stamped_ = n.subscribe<geometry_msgs::TwistStamped>("cmd_vel_stamped", 1, &UlcNode::recvTwistStamped, this);
   sub_enable_ = n.subscribe<std_msgs::Bool>("dbw_enabled", 1, &UlcNode::recvEnable, this);
 
-  // Setup timer for config message
+  // Setup timer for config message retransmission
   double config_frequency = 5.0;
   pn.getParam("config_frequency", config_frequency);
   if (config_frequency > 50.0) {
@@ -103,9 +89,9 @@ void UlcNode::recvUlcCmd(const dataspeed_ulc_msgs::UlcCmdConstPtr& msg)
   // Publish command message
   sendCmdMsg();
 
-  // Publish config message
+  // Publish config message on change
   if (diff) {
-    pub_can_.publish(generateUlcCfgMsg(*msg));
+    sendCfgMsg();
   }
 }
 
@@ -148,23 +134,23 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
       case ID_ULC_REPORT:
         if (msg->dlc >= sizeof(MsgUlcReport)) {
           const MsgUlcReport *ptr = (const MsgUlcReport *)msg->data.elems;
-          dataspeed_ulc_msgs::UlcReport ulc_report;
-          ulc_report.header.stamp = msg->header.stamp;
-          ulc_report.speed_ref = (float)ptr->speed_ref * 0.02f;
-          ulc_report.accel_ref = (float)ptr->accel_ref * 0.05f;
-          ulc_report.speed_meas = (float)ptr->speed_meas * 0.02f;
-          ulc_report.accel_meas = (float)ptr->accel_meas * 0.05f;
-          ulc_report.max_steering_angle = (float)ptr->max_steering_angle * 5.0f;
-          ulc_report.max_steering_vel = (float)ptr->max_steering_vel * 8.0f;
-          ulc_report.pedals_enabled = ptr->pedals_enabled;
-          ulc_report.steering_enabled = ptr->steering_enabled;
-          ulc_report.tracking_mode = ptr->tracking_mode;
-          ulc_report.speed_preempted = ptr->speed_preempted;
-          ulc_report.steering_preempted = ptr->steering_preempted;
-          ulc_report.override_latched = ptr->override;
-          ulc_report.steering_mode = ptr->steering_mode;
-          ulc_report.timeout = ptr->timeout;
-          pub_report_.publish(ulc_report);
+          dataspeed_ulc_msgs::UlcReport report;
+          report.header.stamp = msg->header.stamp;
+          report.speed_ref = (float)ptr->speed_ref * 0.02f;
+          report.accel_ref = (float)ptr->accel_ref * 0.05f;
+          report.speed_meas = (float)ptr->speed_meas * 0.02f;
+          report.accel_meas = (float)ptr->accel_meas * 0.05f;
+          report.max_steering_angle = (float)ptr->max_steering_angle * 5.0f;
+          report.max_steering_vel = (float)ptr->max_steering_vel * 8.0f;
+          report.pedals_enabled = ptr->pedals_enabled;
+          report.steering_enabled = ptr->steering_enabled;
+          report.tracking_mode = ptr->tracking_mode;
+          report.speed_preempted = ptr->speed_preempted;
+          report.steering_preempted = ptr->steering_preempted;
+          report.override_latched = ptr->override;
+          report.steering_mode = ptr->steering_mode;
+          report.timeout = ptr->timeout;
+          pub_report_.publish(report);
         }
         break;
     }
@@ -216,12 +202,36 @@ void UlcNode::sendCmdMsg()
   pub_can_.publish(msg);
 }
 
+void UlcNode::sendCfgMsg()
+{
+  // Build CAN message
+  can_msgs::Frame msg;
+  msg.id = ID_ULC_CONFIG;
+  msg.is_extended = false;
+  msg.dlc = sizeof(MsgUlcCfg);
+  MsgUlcCfg *ptr = (MsgUlcCfg *)msg.data.elems;
+  memset(ptr, 0x00, sizeof(*ptr));
+
+  // Populate acceleration limits
+  ptr->linear_accel  = overflowSaturation(ulc_cmd_.linear_accel,  0, UINT8_MAX, 0.02, "Linear accel limit",  "m/s^2");
+  ptr->linear_decel  = overflowSaturation(ulc_cmd_.linear_decel,  0, UINT8_MAX, 0.02, "Linear decel limit",  "m/s^2");
+  ptr->lateral_accel = overflowSaturation(ulc_cmd_.lateral_accel, 0, UINT8_MAX, 0.05, "Lateral accel limit", "m/s^2");
+  ptr->angular_accel = overflowSaturation(ulc_cmd_.angular_accel, 0, UINT8_MAX, 0.02, "Angular accel limit", "rad/s^2");
+
+  // Publish message
+  pub_can_.publish(msg);
+
+  // Reset timer
+  config_timer_.stop();
+  config_timer_.start();
+}
+
 void UlcNode::configTimerCb(const ros::TimerEvent& event)
 {
-  if ((event.current_real - cmd_stamp_).toSec() > 0.1) {
-    return;
+  // Retransmit config message while command is valid
+  if (event.current_real - cmd_stamp_ < ros::Duration(0.1)) {
+    sendCfgMsg();
   }
-  pub_can_.publish(generateUlcCfgMsg(ulc_cmd_));
 }
 
 }

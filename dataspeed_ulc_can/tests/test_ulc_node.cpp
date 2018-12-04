@@ -99,13 +99,11 @@ static bool waitForTopics(ros::WallDuration dur) {
 
 static void checkImmediateCfg()
 {
-  ros::WallDuration CAN_WAIT_THRES(1.0 / g_cfg_freq);
-  ros::WallDuration IMMEDIATE_THRES(0.005);
-  ros::WallTime cmd_stamp = ros::WallTime::now();
+  ros::WallTime stamp = ros::WallTime::now();
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  EXPECT_TRUE(waitForMsg(CAN_WAIT_THRES, g_msg_ulc_cfg));
-  ASSERT_LE((g_msg_ulc_cfg.stamp() - cmd_stamp), IMMEDIATE_THRES);
+  EXPECT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cfg));
+  EXPECT_NEAR(g_msg_ulc_cfg.stamp().toSec(), stamp.toSec(), 0.005);
 }
 
 TEST(ULCNode, topics)
@@ -116,7 +114,6 @@ TEST(ULCNode, topics)
 TEST(ULCNode, cfgTiming)
 {
   g_ulc_cmd = dataspeed_ulc_msgs::UlcCmd();
-
   g_ulc_cmd.linear_accel = 1.0;
   g_ulc_cmd.linear_decel = 1.0;
   g_ulc_cmd.lateral_accel = 1.0;
@@ -124,20 +121,23 @@ TEST(ULCNode, cfgTiming)
 
   // Publish command messages with the same acceleration limits and make sure
   // config CAN messages are sent at the nominal rate
-  ros::WallTime last_cfg_stamp;
+  size_t count = 0;
+  ros::WallTime stamp_old;
   ros::WallTime t_end = ros::WallTime::now() + ros::WallDuration(1.0);
-  while ((t_end - ros::WallTime::now()).toSec() > 0) {
+  g_msg_ulc_cfg.clear();
+  while (t_end > ros::WallTime::now()) {
     g_pub_ulc_cmd.publish(g_ulc_cmd);
-    EXPECT_TRUE(waitForMsg(ros::WallDuration(1.0), g_msg_ulc_cfg));
-    if (last_cfg_stamp == ros::WallTime(0)) {
-      last_cfg_stamp = g_msg_ulc_cfg.stamp();
-      continue;
-    }
-
-    ASSERT_NEAR(g_msg_ulc_cfg.stamp().toSec(), last_cfg_stamp.toSec(), 1.0 / g_cfg_freq + 0.005);
-    last_cfg_stamp = g_msg_ulc_cfg.stamp();
     ros::WallDuration(0.02).sleep();
+    ros::WallTime stamp_new = g_msg_ulc_cfg.stamp();
+    if (!stamp_new.isZero()) {
+      if (!stamp_old.isZero() && (stamp_old != stamp_new)) {
+        EXPECT_NEAR(stamp_old.toSec() + (1.0 / g_cfg_freq), stamp_new.toSec(), 0.01);
+        count++;
+      }
+      stamp_old = stamp_new;
+    }
   }
+  EXPECT_GE(count, 1);
 
   // Change accel limits and make sure config CAN messages are sent immediately
   g_ulc_cmd.linear_accel = 2.0;

@@ -26,8 +26,9 @@ private:
   void recvEnable(const std_msgs::BoolConstPtr& msg);
   void configTimerCb(const ros::TimerEvent& event);
   void sendCmdMsg();
+  void sendCfgMsg();
 
-  ros::Subscriber sub_lat_lon_cmd_;
+  ros::Subscriber sub_cmd_;
   ros::Subscriber sub_twist_;
   ros::Subscriber sub_twist_stamped_;
   ros::Subscriber sub_can_;
