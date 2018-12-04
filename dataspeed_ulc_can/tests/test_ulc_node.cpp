@@ -83,11 +83,12 @@ static bool waitForTopics(ros::WallDuration dur) {
   const ros::WallTime start = ros::WallTime::now();
   while (true) {
     if ((g_sub_can.getNumPublishers() == 1)
-      && (g_pub_ulc_cmd.getNumSubscribers() == 1)
-      && (g_pub_enable.getNumSubscribers() == 1)
-      && (g_pub_twist.getNumSubscribers() == 1)
-      && (g_pub_twist_stamped.getNumSubscribers() == 1)
-      && (g_pub_can.getNumSubscribers() == 1)) {
+     && (g_sub_report.getNumPublishers() == 1)
+     && (g_pub_ulc_cmd.getNumSubscribers() == 1)
+     && (g_pub_enable.getNumSubscribers() == 1)
+     && (g_pub_twist.getNumSubscribers() == 1)
+     && (g_pub_twist_stamped.getNumSubscribers() == 1)
+     && (g_pub_can.getNumSubscribers() == 1)) {
       return true;
     }
     if ((ros::WallTime::now() - start) > dur) {
