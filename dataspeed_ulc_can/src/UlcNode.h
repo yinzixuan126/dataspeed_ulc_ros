@@ -41,7 +41,6 @@
 #include <can_msgs/Frame.h>
 #include <dataspeed_ulc_msgs/UlcCmd.h>
 #include <dataspeed_ulc_msgs/UlcReport.h>
-#include <dataspeed_ulc_can/dispatch.h>
 
 namespace dataspeed_ulc_can
 {

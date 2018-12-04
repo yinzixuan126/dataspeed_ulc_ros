@@ -33,6 +33,7 @@
  *********************************************************************/
 
 #include "UlcNode.h"
+#include <dataspeed_ulc_can/dispatch.h>
 
 namespace dataspeed_ulc_can
 {
