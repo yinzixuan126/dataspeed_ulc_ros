@@ -87,7 +87,7 @@ void UlcNode::recvUlcCmd(const dataspeed_ulc_msgs::UlcCmdConstPtr& msg)
   ulc_cmd_ = *msg;
 
   // Publish command message
-  sendCmdMsg();
+  sendCmdMsg(true);
 
   // Publish config message on change
   if (diff) {
@@ -114,7 +114,7 @@ void UlcNode::recvTwistCmd(const geometry_msgs::Twist& msg)
   ulc_cmd_.lateral_accel = 0;
 
   // Publish command message
-  sendCmdMsg();
+  sendCmdMsg(false);
 }
 
 void UlcNode::recvTwist(const geometry_msgs::TwistConstPtr& msg)
@@ -157,11 +157,13 @@ void UlcNode::recvCan(const can_msgs::FrameConstPtr& msg)
   }
 }
 
-void UlcNode::sendCmdMsg()
+void UlcNode::sendCmdMsg(bool cfg)
 {
   // Validate input fields
   if (validInputs(ulc_cmd_)) {
-    cmd_stamp_ = ros::Time::now();
+    if (cfg) {
+      cmd_stamp_ = ros::Time::now();
+    }
   } else {
     cmd_stamp_ = ros::Time(0);
     return;

@@ -432,19 +432,16 @@ TEST(ULCNode, twistInputs)
   geometry_msgs::Twist twist_cmd;
   twist_cmd.linear.x = 22.0;
   twist_cmd.angular.z = 0.2;
+  ros::WallDuration(1.0).sleep();
 
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_twist.publish(twist_cmd);
   ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.2), g_msg_ulc_cfg));
-  ASSERT_EQ((int16_t)(twist_cmd.linear.x / LIN_VEL_SCALE_FACTOR), g_msg_ulc_cmd.get().linear_velocity);
-  ASSERT_EQ((int16_t)(twist_cmd.angular.z / YAW_RATE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
-  ASSERT_EQ(0, g_msg_ulc_cmd.get().steering_mode);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().linear_accel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().linear_decel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().lateral_accel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().angular_accel);
+  EXPECT_FALSE(waitForMsg(ros::WallDuration(0.5), g_msg_ulc_cfg));
+  EXPECT_EQ((int16_t)(twist_cmd.linear.x / LIN_VEL_SCALE_FACTOR), g_msg_ulc_cmd.get().linear_velocity);
+  EXPECT_EQ((int16_t)(twist_cmd.angular.z / YAW_RATE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
+  EXPECT_EQ(0, g_msg_ulc_cmd.get().steering_mode);
 
   geometry_msgs::TwistStamped twist_stamped_cmd;
   twist_stamped_cmd.twist = twist_cmd;
@@ -452,14 +449,10 @@ TEST(ULCNode, twistInputs)
   g_msg_ulc_cfg.clear();
   g_pub_twist_stamped.publish(twist_stamped_cmd);
   ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.2), g_msg_ulc_cfg));
-  ASSERT_EQ((int16_t)(twist_cmd.linear.x / LIN_VEL_SCALE_FACTOR), g_msg_ulc_cmd.get().linear_velocity);
-  ASSERT_EQ((int16_t)(twist_cmd.angular.z / YAW_RATE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
-  ASSERT_EQ(0, g_msg_ulc_cmd.get().steering_mode);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().linear_accel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().linear_decel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().lateral_accel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().angular_accel);
+  EXPECT_FALSE(waitForMsg(ros::WallDuration(0.5), g_msg_ulc_cfg));
+  EXPECT_EQ((int16_t)(twist_cmd.linear.x / LIN_VEL_SCALE_FACTOR), g_msg_ulc_cmd.get().linear_velocity);
+  EXPECT_EQ((int16_t)(twist_cmd.angular.z / YAW_RATE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
+  EXPECT_EQ(0, g_msg_ulc_cmd.get().steering_mode);
 }
 
 TEST(ULCNode, reportParsing)

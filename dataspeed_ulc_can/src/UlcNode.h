@@ -25,7 +25,7 @@ private:
   void recvTwistStamped(const geometry_msgs::TwistStampedConstPtr& msg);
   void recvEnable(const std_msgs::BoolConstPtr& msg);
   void configTimerCb(const ros::TimerEvent& event);
-  void sendCmdMsg();
+  void sendCmdMsg(bool cfg);
   void sendCfgMsg();
 
   ros::Subscriber sub_cmd_;
