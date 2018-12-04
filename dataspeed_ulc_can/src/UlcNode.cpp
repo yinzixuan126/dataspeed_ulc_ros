@@ -52,14 +52,14 @@ UlcNode::UlcNode(ros::NodeHandle n, ros::NodeHandle pn) :
 {
   // Setup publishers
   pub_report_ = n.advertise<dataspeed_ulc_msgs::UlcReport>("ulc_report", 2);
-  pub_can_ = n.advertise<can_msgs::Frame>("can_tx", 10);
+  pub_can_ = n.advertise<can_msgs::Frame>("can_tx", 100);
 
   // Setup subscribers
   sub_can_ = n.subscribe<can_msgs::Frame>("can_rx", 100, &UlcNode::recvCan, this);
-  sub_cmd_ = n.subscribe<dataspeed_ulc_msgs::UlcCmd>("ulc_cmd", 1, &UlcNode::recvUlcCmd, this);
-  sub_twist_ = n.subscribe<geometry_msgs::Twist>("cmd_vel", 1, &UlcNode::recvTwist, this);
-  sub_twist_stamped_ = n.subscribe<geometry_msgs::TwistStamped>("cmd_vel_stamped", 1, &UlcNode::recvTwistStamped, this);
-  sub_enable_ = n.subscribe<std_msgs::Bool>("dbw_enabled", 1, &UlcNode::recvEnable, this);
+  sub_cmd_ = n.subscribe<dataspeed_ulc_msgs::UlcCmd>("ulc_cmd", 2, &UlcNode::recvUlcCmd, this);
+  sub_twist_ = n.subscribe<geometry_msgs::Twist>("cmd_vel", 2, &UlcNode::recvTwist, this);
+  sub_twist_stamped_ = n.subscribe<geometry_msgs::TwistStamped>("cmd_vel_stamped", 2, &UlcNode::recvTwistStamped, this);
+  sub_enable_ = n.subscribe<std_msgs::Bool>("dbw_enabled", 2, &UlcNode::recvEnable, this);
 
   // Setup timer for config message retransmission
   double config_frequency = 5.0;

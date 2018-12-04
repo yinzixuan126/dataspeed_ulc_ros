@@ -503,13 +503,13 @@ int main(int argc, char **argv) {
   n = new ros::NodeHandle();
   pn = new ros::NodeHandle("~");
 
-  g_sub_can = n->subscribe("can_tx", 10, recvCan);
+  g_sub_can = n->subscribe("can_tx", 100, recvCan);
   g_sub_report = n->subscribe("ulc_report", 10, recvReport);
-  g_pub_ulc_cmd = n->advertise<dataspeed_ulc_msgs::UlcCmd>("ulc_cmd", 1);
-  g_pub_enable = n->advertise<std_msgs::Bool>("dbw_enabled", 1);
-  g_pub_twist = n->advertise<geometry_msgs::Twist>("cmd_vel", 1);
-  g_pub_twist_stamped = n->advertise<geometry_msgs::TwistStamped>("cmd_vel_stamped", 1);
-  g_pub_can = n->advertise<can_msgs::Frame>("can_rx", 10);
+  g_pub_ulc_cmd = n->advertise<dataspeed_ulc_msgs::UlcCmd>("ulc_cmd", 2);
+  g_pub_enable = n->advertise<std_msgs::Bool>("dbw_enabled", 2);
+  g_pub_twist = n->advertise<geometry_msgs::Twist>("cmd_vel", 2);
+  g_pub_twist_stamped = n->advertise<geometry_msgs::TwistStamped>("cmd_vel_stamped", 2);
+  g_pub_can = n->advertise<can_msgs::Frame>("can_rx", 100);
   pn->param("config_frequency", g_cfg_freq, 5.0);
 
   // Setup Spinner
