@@ -103,7 +103,7 @@ static void checkImmediateCfg()
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
   EXPECT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cfg));
-  EXPECT_NEAR(g_msg_ulc_cfg.stamp().toSec(), stamp.toSec(), 0.005);
+  EXPECT_NEAR(g_msg_ulc_cfg.stamp().toSec(), stamp.toSec(), 0.01);
 }
 
 TEST(ULCNode, topics)

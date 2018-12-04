@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
 
-  <arg name="config_freq" value="15.0" />
+  <arg name="config_freq" value="8.0" />
 
   <!-- Node under test -->
   <node pkg="dataspeed_ulc_can" type="ulc_node" name="ulc_node" output="screen" >
