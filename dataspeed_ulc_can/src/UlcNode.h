@@ -20,12 +20,12 @@ private:
 
   void recvCan(const can_msgs::FrameConstPtr& msg);
   void recvUlcCmd(const dataspeed_ulc_msgs::UlcCmdConstPtr& msg);
+  void recvTwistCmd(const geometry_msgs::Twist& msg);
   void recvTwist(const geometry_msgs::TwistConstPtr& msg);
   void recvTwistStamped(const geometry_msgs::TwistStampedConstPtr& msg);
   void recvEnable(const std_msgs::BoolConstPtr& msg);
   void configTimerCb(const ros::TimerEvent& event);
   void sendCmdMsg();
-  static void processTwistInput(const geometry_msgs::Twist& twist, dataspeed_ulc_msgs::UlcCmd& cmd);
 
   ros::Subscriber sub_lat_lon_cmd_;
   ros::Subscriber sub_twist_;
