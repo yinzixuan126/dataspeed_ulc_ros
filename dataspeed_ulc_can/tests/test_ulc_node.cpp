@@ -109,7 +109,11 @@ static void checkImmediateCfg()
 
 TEST(ULCNode, topics)
 {
+  // Wait for all topics to connect before running other tests
   ASSERT_TRUE(waitForTopics(ros::WallDuration(2.0)));
+
+  // Call unused function to complete coverage testing
+  dispatchAssertSizes();
 }
 
 TEST(ULCNode, cfgTiming)

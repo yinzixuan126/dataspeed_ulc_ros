@@ -103,3 +103,4 @@ enum {
 } // namespace dataspeed_ulc_can
 
 #endif // _DATASPEED_ULC_CAN_DISPATCH_H
+
