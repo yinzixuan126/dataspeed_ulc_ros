@@ -2,6 +2,9 @@
 Changelog for package dataspeed_ulc_msgs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+
 0.0.1 (2018-11-30)
 ------------------
 * Initial release
