@@ -48,7 +48,7 @@ namespace dataspeed_ulc_can
 class UlcNode
 {
 public:
-  UlcNode(ros::NodeHandle n, ros::NodeHandle pn);
+  UlcNode(ros::NodeHandle &n, ros::NodeHandle &pn);
 private:
 
   void recvCan(const can_msgs::FrameConstPtr& msg);

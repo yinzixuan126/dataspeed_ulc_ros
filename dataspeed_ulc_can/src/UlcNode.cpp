@@ -38,6 +38,20 @@
 namespace dataspeed_ulc_can
 {
 
+template <typename T>
+static void getParamWithSaturation(ros::NodeHandle &nh, const std::string& key, T& value, T min, T max)
+{
+  if (nh.getParam(key, value)) {
+    if (value < min) {
+      value = min;
+      nh.setParam(key, value);
+    } else if (value > max) {
+      value = max;
+      nh.setParam(key, value);
+    }
+  }
+}
+
 template <class T>
 static T overflowSaturation(double input, T limit_min, T limit_max, double scale_factor, const std::string& input_name, const std::string& units)
 {
@@ -82,7 +96,7 @@ static inline bool validInputs(const dataspeed_ulc_msgs::UlcCmd& cmd)
   return valid;
 }
 
-UlcNode::UlcNode(ros::NodeHandle n, ros::NodeHandle pn) :
+UlcNode::UlcNode(ros::NodeHandle &n, ros::NodeHandle &pn) :
   enable_(false)
 {
   // Setup publishers
@@ -97,14 +111,9 @@ UlcNode::UlcNode(ros::NodeHandle n, ros::NodeHandle pn) :
   sub_enable_ = n.subscribe<std_msgs::Bool>("dbw_enabled", 2, &UlcNode::recvEnable, this);
 
   // Setup timer for config message retransmission
-  double config_frequency = 5.0;
-  pn.getParam("config_frequency", config_frequency);
-  if (config_frequency > 50.0) {
-    config_frequency = 50.0;
-  } else if (config_frequency < 5.0) {
-    config_frequency = 5.0;
-  }
-  config_timer_ = n.createTimer(ros::Duration(1.0 / config_frequency), &UlcNode::configTimerCb, this);
+  double freq = 5.0;
+  getParamWithSaturation(pn, "config_frequency", freq, 5.0, 50.0);
+  config_timer_ = n.createTimer(ros::Duration(1.0 / freq), &UlcNode::configTimerCb, this);
 }
 
 void UlcNode::recvEnable(const std_msgs::BoolConstPtr& msg)

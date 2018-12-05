@@ -111,6 +111,7 @@ TEST(ULCNode, topics)
 {
   // Wait for all topics to connect before running other tests
   ASSERT_TRUE(waitForTopics(ros::WallDuration(2.0)));
+  ros::WallDuration(1.0).sleep();
 
   // Call unused function to complete coverage testing
   dispatchAssertSizes();
