@@ -13,9 +13,9 @@ using namespace dataspeed_ulc_can;
 
 ros::NodeHandle *n, *pn;
 
-MsgRx<MsgUlcCmd> g_msg_ulc_cmd(ros::WallDuration(0.01));
-MsgRx<MsgUlcCfg> g_msg_ulc_cfg(ros::WallDuration(0.01));
-MsgRx<dataspeed_ulc_msgs::UlcReport> g_msg_ulc_report(ros::WallDuration(0.01));
+MsgRx<MsgUlcCmd> g_msg_ulc_cmd(ros::WallDuration(0.05));
+MsgRx<MsgUlcCfg> g_msg_ulc_cfg(ros::WallDuration(0.05));
+MsgRx<dataspeed_ulc_msgs::UlcReport> g_msg_ulc_report(ros::WallDuration(0.05));
 
 dataspeed_ulc_msgs::UlcCmd g_ulc_cmd;
 double g_cfg_freq;
@@ -83,11 +83,12 @@ static bool waitForTopics(ros::WallDuration dur) {
   const ros::WallTime start = ros::WallTime::now();
   while (true) {
     if ((g_sub_can.getNumPublishers() == 1)
-      && (g_pub_ulc_cmd.getNumSubscribers() == 1)
-      && (g_pub_enable.getNumSubscribers() == 1)
-      && (g_pub_twist.getNumSubscribers() == 1)
-      && (g_pub_twist_stamped.getNumSubscribers() == 1)
-      && (g_pub_can.getNumSubscribers() == 1)) {
+     && (g_sub_report.getNumPublishers() == 1)
+     && (g_pub_ulc_cmd.getNumSubscribers() == 1)
+     && (g_pub_enable.getNumSubscribers() == 1)
+     && (g_pub_twist.getNumSubscribers() == 1)
+     && (g_pub_twist_stamped.getNumSubscribers() == 1)
+     && (g_pub_can.getNumSubscribers() == 1)) {
       return true;
     }
     if ((ros::WallTime::now() - start) > dur) {
@@ -99,24 +100,26 @@ static bool waitForTopics(ros::WallDuration dur) {
 
 static void checkImmediateCfg()
 {
-  ros::WallDuration CAN_WAIT_THRES(1.0 / g_cfg_freq);
-  ros::WallDuration IMMEDIATE_THRES(0.005);
-  ros::WallTime cmd_stamp = ros::WallTime::now();
+  ros::WallTime stamp = ros::WallTime::now();
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  EXPECT_TRUE(waitForMsg(CAN_WAIT_THRES, g_msg_ulc_cfg));
-  ASSERT_LE((g_msg_ulc_cfg.stamp() - cmd_stamp), IMMEDIATE_THRES);
+  EXPECT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cfg));
+  EXPECT_NEAR(g_msg_ulc_cfg.stamp().toSec(), stamp.toSec(), 0.01);
 }
 
 TEST(ULCNode, topics)
 {
+  // Wait for all topics to connect before running other tests
   ASSERT_TRUE(waitForTopics(ros::WallDuration(2.0)));
+  ros::WallDuration(1.0).sleep();
+
+  // Call unused function to complete coverage testing
+  dispatchAssertSizes();
 }
 
 TEST(ULCNode, cfgTiming)
 {
   g_ulc_cmd = dataspeed_ulc_msgs::UlcCmd();
-
   g_ulc_cmd.linear_accel = 1.0;
   g_ulc_cmd.linear_decel = 1.0;
   g_ulc_cmd.lateral_accel = 1.0;
@@ -124,20 +127,23 @@ TEST(ULCNode, cfgTiming)
 
   // Publish command messages with the same acceleration limits and make sure
   // config CAN messages are sent at the nominal rate
-  ros::WallTime last_cfg_stamp;
+  size_t count = 0;
+  ros::WallTime stamp_old;
   ros::WallTime t_end = ros::WallTime::now() + ros::WallDuration(1.0);
-  while ((t_end - ros::WallTime::now()).toSec() > 0) {
+  g_msg_ulc_cfg.clear();
+  while (t_end > ros::WallTime::now()) {
     g_pub_ulc_cmd.publish(g_ulc_cmd);
-    EXPECT_TRUE(waitForMsg(ros::WallDuration(1.0), g_msg_ulc_cfg));
-    if (last_cfg_stamp == ros::WallTime(0)) {
-      last_cfg_stamp = g_msg_ulc_cfg.stamp();
-      continue;
-    }
-
-    ASSERT_NEAR(g_msg_ulc_cfg.stamp().toSec(), last_cfg_stamp.toSec(), 1.0 / g_cfg_freq + 0.005);
-    last_cfg_stamp = g_msg_ulc_cfg.stamp();
     ros::WallDuration(0.02).sleep();
+    ros::WallTime stamp_new = g_msg_ulc_cfg.stamp();
+    if (!stamp_new.isZero()) {
+      if (!stamp_old.isZero() && (stamp_old != stamp_new)) {
+        EXPECT_NEAR(stamp_old.toSec() + (1.0 / g_cfg_freq), stamp_new.toSec(), 0.01);
+        count++;
+      }
+      stamp_old = stamp_new;
+    }
   }
+  EXPECT_GE(count, 1);
 
   // Change accel limits and make sure config CAN messages are sent immediately
   g_ulc_cmd.linear_accel = 2.0;
@@ -169,14 +175,14 @@ TEST(ULCNode, cmdRangeSaturation)
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cfg));
-  ASSERT_EQ(g_msg_ulc_cmd.get().linear_velocity, INT16_MIN);
-  ASSERT_EQ(g_msg_ulc_cmd.get().yaw_command, INT16_MIN);
-  ASSERT_EQ(g_msg_ulc_cfg.get().linear_accel, 0);
-  ASSERT_EQ(g_msg_ulc_cfg.get().linear_decel, 0);
-  ASSERT_EQ(g_msg_ulc_cfg.get().lateral_accel, 0);
-  ASSERT_EQ(g_msg_ulc_cfg.get().angular_accel, 0);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cfg));
+  EXPECT_EQ(INT16_MIN, g_msg_ulc_cmd.get().linear_velocity);
+  EXPECT_EQ(INT16_MIN, g_msg_ulc_cmd.get().yaw_command);
+  EXPECT_EQ(0, g_msg_ulc_cfg.get().linear_accel);
+  EXPECT_EQ(0, g_msg_ulc_cfg.get().linear_decel);
+  EXPECT_EQ(0, g_msg_ulc_cfg.get().lateral_accel);
+  EXPECT_EQ(0, g_msg_ulc_cfg.get().angular_accel);
 
   // Curvature steering
   g_ulc_cmd.yaw_command = (INT16_MIN * CURVATURE_SCALE_FACTOR) - 0.05;
@@ -184,8 +190,8 @@ TEST(ULCNode, cmdRangeSaturation)
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_EQ(g_msg_ulc_cmd.get().yaw_command, INT16_MIN);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  EXPECT_EQ(INT16_MIN, g_msg_ulc_cmd.get().yaw_command);
   /**************************************************************************/
 
   /*** Overflow tests *******************************************************/
@@ -203,14 +209,14 @@ TEST(ULCNode, cmdRangeSaturation)
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cfg));
-  ASSERT_EQ(g_msg_ulc_cmd.get().linear_velocity, INT16_MAX);
-  ASSERT_EQ(g_msg_ulc_cmd.get().yaw_command, INT16_MAX);
-  ASSERT_EQ(g_msg_ulc_cfg.get().linear_accel, UINT8_MAX);
-  ASSERT_EQ(g_msg_ulc_cfg.get().linear_decel, UINT8_MAX);
-  ASSERT_EQ(g_msg_ulc_cfg.get().lateral_accel, UINT8_MAX);
-  ASSERT_EQ(g_msg_ulc_cfg.get().angular_accel, UINT8_MAX);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cfg));
+  EXPECT_EQ(INT16_MAX, g_msg_ulc_cmd.get().linear_velocity);
+  EXPECT_EQ(INT16_MAX, g_msg_ulc_cmd.get().yaw_command);
+  EXPECT_EQ(UINT8_MAX, g_msg_ulc_cfg.get().linear_accel);
+  EXPECT_EQ(UINT8_MAX, g_msg_ulc_cfg.get().linear_decel);
+  EXPECT_EQ(UINT8_MAX, g_msg_ulc_cfg.get().lateral_accel);
+  EXPECT_EQ(UINT8_MAX, g_msg_ulc_cfg.get().angular_accel);
 
   // Curvature steering
   g_ulc_cmd.yaw_command = (INT16_MAX * CURVATURE_SCALE_FACTOR) + 0.05;
@@ -218,8 +224,8 @@ TEST(ULCNode, cmdRangeSaturation)
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_EQ(g_msg_ulc_cmd.get().yaw_command, INT16_MAX);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  EXPECT_EQ(INT16_MAX, g_msg_ulc_cmd.get().yaw_command);
   /**************************************************************************/
 
   /*** +Inf tests ***********************************************************/
@@ -237,14 +243,14 @@ TEST(ULCNode, cmdRangeSaturation)
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cfg));
-  ASSERT_EQ(g_msg_ulc_cmd.get().linear_velocity, INT16_MAX);
-  ASSERT_EQ(g_msg_ulc_cmd.get().yaw_command, INT16_MAX);
-  ASSERT_EQ(g_msg_ulc_cfg.get().linear_accel, UINT8_MAX);
-  ASSERT_EQ(g_msg_ulc_cfg.get().linear_decel, UINT8_MAX);
-  ASSERT_EQ(g_msg_ulc_cfg.get().lateral_accel, UINT8_MAX);
-  ASSERT_EQ(g_msg_ulc_cfg.get().angular_accel, UINT8_MAX);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cfg));
+  EXPECT_EQ(INT16_MAX, g_msg_ulc_cmd.get().linear_velocity);
+  EXPECT_EQ(INT16_MAX, g_msg_ulc_cmd.get().yaw_command);
+  EXPECT_EQ(UINT8_MAX, g_msg_ulc_cfg.get().linear_accel);
+  EXPECT_EQ(UINT8_MAX, g_msg_ulc_cfg.get().linear_decel);
+  EXPECT_EQ(UINT8_MAX, g_msg_ulc_cfg.get().lateral_accel);
+  EXPECT_EQ(UINT8_MAX, g_msg_ulc_cfg.get().angular_accel);
 
   // Curvature steering
   g_ulc_cmd.yaw_command = INFINITY;
@@ -252,8 +258,8 @@ TEST(ULCNode, cmdRangeSaturation)
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_EQ(g_msg_ulc_cmd.get().yaw_command, INT16_MAX);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  EXPECT_EQ(INT16_MAX, g_msg_ulc_cmd.get().yaw_command);
   /**************************************************************************/
 
   /*** -Inf tests ***********************************************************/
@@ -271,14 +277,14 @@ TEST(ULCNode, cmdRangeSaturation)
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cfg));
-  ASSERT_EQ(g_msg_ulc_cmd.get().linear_velocity, INT16_MIN);
-  ASSERT_EQ(g_msg_ulc_cmd.get().yaw_command, INT16_MIN);
-  ASSERT_EQ(g_msg_ulc_cfg.get().linear_accel, 0);
-  ASSERT_EQ(g_msg_ulc_cfg.get().linear_decel, 0);
-  ASSERT_EQ(g_msg_ulc_cfg.get().lateral_accel, 0);
-  ASSERT_EQ(g_msg_ulc_cfg.get().angular_accel, 0);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cfg));
+  EXPECT_EQ(INT16_MIN, g_msg_ulc_cmd.get().linear_velocity);
+  EXPECT_EQ(INT16_MIN, g_msg_ulc_cmd.get().yaw_command);
+  EXPECT_EQ(0, g_msg_ulc_cfg.get().linear_accel);
+  EXPECT_EQ(0, g_msg_ulc_cfg.get().linear_decel);
+  EXPECT_EQ(0, g_msg_ulc_cfg.get().lateral_accel);
+  EXPECT_EQ(0, g_msg_ulc_cfg.get().angular_accel);
 
   // Curvature steering
   g_ulc_cmd.yaw_command = -INFINITY;
@@ -286,8 +292,8 @@ TEST(ULCNode, cmdRangeSaturation)
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_EQ(g_msg_ulc_cmd.get().yaw_command, INT16_MIN);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  EXPECT_EQ(INT16_MIN, g_msg_ulc_cmd.get().yaw_command);
   /**************************************************************************/
 }
 
@@ -300,52 +306,52 @@ TEST(ULCNode, outOfBoundsInputs)
   g_ulc_cmd.linear_velocity = NAN;
   g_msg_ulc_cmd.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_FALSE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
+  EXPECT_FALSE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
 
   // NaN in yaw command field
   g_ulc_cmd = dataspeed_ulc_msgs::UlcCmd();
   g_ulc_cmd.yaw_command = NAN;
   g_msg_ulc_cmd.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_FALSE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
+  ASSERT_FALSE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
 
   // NaN in linear accel field
   g_ulc_cmd = dataspeed_ulc_msgs::UlcCmd();
   g_ulc_cmd.linear_accel = NAN;
   g_msg_ulc_cmd.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_FALSE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
+  EXPECT_FALSE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
 
   // NaN in linear decel field
   g_ulc_cmd = dataspeed_ulc_msgs::UlcCmd();
   g_ulc_cmd.linear_decel = NAN;
   g_msg_ulc_cmd.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_FALSE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
+  EXPECT_FALSE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
 
   // NaN in lateral accel field
   g_ulc_cmd = dataspeed_ulc_msgs::UlcCmd();
   g_ulc_cmd.lateral_accel = NAN;
   g_msg_ulc_cmd.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_FALSE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
+  EXPECT_FALSE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
 
   // NaN in angular accel field
   g_ulc_cmd = dataspeed_ulc_msgs::UlcCmd();
   g_ulc_cmd.angular_accel = NAN;
   g_msg_ulc_cmd.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_FALSE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
+  EXPECT_FALSE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
 
   // Invalid steering mode
   g_ulc_cmd = dataspeed_ulc_msgs::UlcCmd();
   g_ulc_cmd.steering_mode = 3;
   g_msg_ulc_cmd.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_FALSE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
+  EXPECT_FALSE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
 
   // Make sure no config messages were sent during this process
-  ASSERT_FALSE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cfg));
+  EXPECT_FALSE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cfg));
 }
 
 TEST(ULCNode, scaleFactors)
@@ -363,22 +369,22 @@ TEST(ULCNode, scaleFactors)
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cfg));
-  ASSERT_EQ((int16_t)(g_ulc_cmd.linear_velocity / LIN_VEL_SCALE_FACTOR), g_msg_ulc_cmd.get().linear_velocity);
-  ASSERT_EQ((int16_t)(g_ulc_cmd.yaw_command / YAW_RATE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
-  ASSERT_EQ((int16_t)(g_ulc_cmd.linear_accel / LINEAR_ACCEL_SCALE_FACTOR), g_msg_ulc_cfg.get().linear_accel);
-  ASSERT_EQ((int16_t)(g_ulc_cmd.linear_decel / LINEAR_DECEL_SCALE_FACTOR), g_msg_ulc_cfg.get().linear_decel);
-  ASSERT_EQ((int16_t)(g_ulc_cmd.lateral_accel / LATERAL_ACCEL_SCALE_FACTOR), g_msg_ulc_cfg.get().lateral_accel);
-  ASSERT_EQ((int16_t)(g_ulc_cmd.angular_accel / ANGULAR_ACCEL_SCALE_FACTOR), g_msg_ulc_cfg.get().angular_accel);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cfg));
+  EXPECT_EQ((int16_t)(g_ulc_cmd.linear_velocity / LIN_VEL_SCALE_FACTOR), g_msg_ulc_cmd.get().linear_velocity);
+  EXPECT_EQ((int16_t)(g_ulc_cmd.yaw_command / YAW_RATE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
+  EXPECT_EQ((int16_t)(g_ulc_cmd.linear_accel / LINEAR_ACCEL_SCALE_FACTOR), g_msg_ulc_cfg.get().linear_accel);
+  EXPECT_EQ((int16_t)(g_ulc_cmd.linear_decel / LINEAR_DECEL_SCALE_FACTOR), g_msg_ulc_cfg.get().linear_decel);
+  EXPECT_EQ((int16_t)(g_ulc_cmd.lateral_accel / LATERAL_ACCEL_SCALE_FACTOR), g_msg_ulc_cfg.get().lateral_accel);
+  EXPECT_EQ((int16_t)(g_ulc_cmd.angular_accel / ANGULAR_ACCEL_SCALE_FACTOR), g_msg_ulc_cfg.get().angular_accel);
 
   // Curvature steering
   g_ulc_cmd.yaw_command = 0.0789;
   g_ulc_cmd.steering_mode = dataspeed_ulc_msgs::UlcCmd::CURVATURE_MODE;
   g_msg_ulc_cmd.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_EQ((int16_t)(g_ulc_cmd.yaw_command / CURVATURE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  EXPECT_EQ((int16_t)(g_ulc_cmd.yaw_command / CURVATURE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
 }
 
 TEST(ULCNode, dbwEnable)
@@ -394,11 +400,11 @@ TEST(ULCNode, dbwEnable)
   // Make sure CAN enable signals are false because dbw_enabled was not sent yet
   g_msg_ulc_cmd.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_FALSE(g_msg_ulc_cmd.get().enable_pedals);
-  ASSERT_FALSE(g_msg_ulc_cmd.get().enable_steering);
-  ASSERT_FALSE(g_msg_ulc_cmd.get().enable_shifting);
-  ASSERT_FALSE(g_msg_ulc_cmd.get().shift_from_park);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  EXPECT_FALSE(g_msg_ulc_cmd.get().enable_pedals);
+  EXPECT_FALSE(g_msg_ulc_cmd.get().enable_steering);
+  EXPECT_FALSE(g_msg_ulc_cmd.get().enable_shifting);
+  EXPECT_FALSE(g_msg_ulc_cmd.get().shift_from_park);
 
   // Publish dbw_enabled as true
   dbw_enabled_msg.data = true;
@@ -408,11 +414,11 @@ TEST(ULCNode, dbwEnable)
   // Send command again and make sure CAN enable signals are true
   g_msg_ulc_cmd.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_TRUE(g_msg_ulc_cmd.get().enable_pedals);
-  ASSERT_TRUE(g_msg_ulc_cmd.get().enable_steering);
-  ASSERT_TRUE(g_msg_ulc_cmd.get().enable_shifting);
-  ASSERT_TRUE(g_msg_ulc_cmd.get().shift_from_park);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  EXPECT_TRUE(g_msg_ulc_cmd.get().enable_pedals);
+  EXPECT_TRUE(g_msg_ulc_cmd.get().enable_steering);
+  EXPECT_TRUE(g_msg_ulc_cmd.get().enable_shifting);
+  EXPECT_TRUE(g_msg_ulc_cmd.get().shift_from_park);
 
   // Publish dbw_enabled as false and make sure CAN enable signals are false
   dbw_enabled_msg.data = false;
@@ -420,7 +426,7 @@ TEST(ULCNode, dbwEnable)
   ros::WallDuration(0.05).sleep();
   g_msg_ulc_cmd.clear();
   g_pub_ulc_cmd.publish(g_ulc_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
   ASSERT_FALSE(g_msg_ulc_cmd.get().enable_pedals);
   ASSERT_FALSE(g_msg_ulc_cmd.get().enable_steering);
   ASSERT_FALSE(g_msg_ulc_cmd.get().enable_shifting);
@@ -432,34 +438,27 @@ TEST(ULCNode, twistInputs)
   geometry_msgs::Twist twist_cmd;
   twist_cmd.linear.x = 22.0;
   twist_cmd.angular.z = 0.2;
+  ros::WallDuration(1.0).sleep();
 
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_twist.publish(twist_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.2), g_msg_ulc_cfg));
-  ASSERT_EQ((int16_t)(twist_cmd.linear.x / LIN_VEL_SCALE_FACTOR), g_msg_ulc_cmd.get().linear_velocity);
-  ASSERT_EQ((int16_t)(twist_cmd.angular.z / YAW_RATE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
-  ASSERT_EQ(0, g_msg_ulc_cmd.get().steering_mode);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().linear_accel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().linear_decel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().lateral_accel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().angular_accel);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  EXPECT_FALSE(waitForMsg(ros::WallDuration(0.5), g_msg_ulc_cfg));
+  EXPECT_EQ((int16_t)(twist_cmd.linear.x / LIN_VEL_SCALE_FACTOR), g_msg_ulc_cmd.get().linear_velocity);
+  EXPECT_EQ((int16_t)(twist_cmd.angular.z / YAW_RATE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
+  EXPECT_EQ(0, g_msg_ulc_cmd.get().steering_mode);
 
   geometry_msgs::TwistStamped twist_stamped_cmd;
   twist_stamped_cmd.twist = twist_cmd;
   g_msg_ulc_cmd.clear();
   g_msg_ulc_cfg.clear();
   g_pub_twist_stamped.publish(twist_stamped_cmd);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_cmd));
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.2), g_msg_ulc_cfg));
-  ASSERT_EQ((int16_t)(twist_cmd.linear.x / LIN_VEL_SCALE_FACTOR), g_msg_ulc_cmd.get().linear_velocity);
-  ASSERT_EQ((int16_t)(twist_cmd.angular.z / YAW_RATE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
-  ASSERT_EQ(0, g_msg_ulc_cmd.get().steering_mode);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().linear_accel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().linear_decel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().lateral_accel);
-  ASSERT_EQ(0, g_msg_ulc_cfg.get().angular_accel);
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_cmd));
+  EXPECT_FALSE(waitForMsg(ros::WallDuration(0.5), g_msg_ulc_cfg));
+  EXPECT_EQ((int16_t)(twist_cmd.linear.x / LIN_VEL_SCALE_FACTOR), g_msg_ulc_cmd.get().linear_velocity);
+  EXPECT_EQ((int16_t)(twist_cmd.angular.z / YAW_RATE_SCALE_FACTOR), g_msg_ulc_cmd.get().yaw_command);
+  EXPECT_EQ(0, g_msg_ulc_cmd.get().steering_mode);
 }
 
 TEST(ULCNode, reportParsing)
@@ -486,7 +485,7 @@ TEST(ULCNode, reportParsing)
   msg_report_ptr->override = true;
 
   g_pub_can.publish(report_out);
-  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.05), g_msg_ulc_report));
+  ASSERT_TRUE(waitForMsg(ros::WallDuration(0.1), g_msg_ulc_report));
   ASSERT_FALSE(g_msg_ulc_report.get().timeout);
   ASSERT_EQ(0, g_msg_ulc_report.get().tracking_mode);
   ASSERT_EQ(1, g_msg_ulc_report.get().steering_mode);
@@ -509,13 +508,13 @@ int main(int argc, char **argv) {
   n = new ros::NodeHandle();
   pn = new ros::NodeHandle("~");
 
-  g_sub_can = n->subscribe("can_tx", 10, recvCan);
+  g_sub_can = n->subscribe("can_tx", 100, recvCan);
   g_sub_report = n->subscribe("ulc_report", 10, recvReport);
-  g_pub_ulc_cmd = n->advertise<dataspeed_ulc_msgs::UlcCmd>("ulc_cmd", 1);
-  g_pub_enable = n->advertise<std_msgs::Bool>("dbw_enabled", 1);
-  g_pub_twist = n->advertise<geometry_msgs::Twist>("cmd_vel", 1);
-  g_pub_twist_stamped = n->advertise<geometry_msgs::TwistStamped>("cmd_vel_stamped", 1);
-  g_pub_can = n->advertise<can_msgs::Frame>("can_rx", 10);
+  g_pub_ulc_cmd = n->advertise<dataspeed_ulc_msgs::UlcCmd>("ulc_cmd", 2);
+  g_pub_enable = n->advertise<std_msgs::Bool>("dbw_enabled", 2);
+  g_pub_twist = n->advertise<geometry_msgs::Twist>("cmd_vel", 2);
+  g_pub_twist_stamped = n->advertise<geometry_msgs::TwistStamped>("cmd_vel_stamped", 2);
+  g_pub_can = n->advertise<can_msgs::Frame>("can_rx", 100);
   pn->param("config_frequency", g_cfg_freq, 5.0);
 
   // Setup Spinner

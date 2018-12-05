@@ -21,6 +21,8 @@
   <depend>can_msgs</depend>
   <depend>dataspeed_ulc_msgs</depend>
 
+  <test_depend>roslib</test_depend> <!-- Needed for ROS_DISTRO environment variable -->
+
   <export>
     <nodelet plugin="${prefix}/nodelets.xml" />
   </export>
