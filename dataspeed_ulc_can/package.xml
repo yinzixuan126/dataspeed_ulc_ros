@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>dataspeed_ulc_can</name>
-  <version>0.0.1</version>
+  <version>0.0.2</version>
   <description>
     Package to translate ROS messages to and from CAN messages to interact with the Universal Lat/Lon Controller (ULC) firmware
   </description>
