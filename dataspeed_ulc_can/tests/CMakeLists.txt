@@ -2,6 +2,7 @@
 #
 #   Only configured when CATKIN_ENABLE_TESTING is true.
 
+find_package(roslib REQUIRED)
 find_package(rostest REQUIRED)
 
 # Test node
