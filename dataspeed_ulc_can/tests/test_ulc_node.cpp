@@ -508,8 +508,9 @@ int main(int argc, char **argv) {
   n = new ros::NodeHandle();
   pn = new ros::NodeHandle("~");
 
-  g_sub_can = n->subscribe("can_tx", 100, recvCan);
-  g_sub_report = n->subscribe("ulc_report", 10, recvReport);
+  const ros::TransportHints NODELAY = ros::TransportHints().tcpNoDelay();
+  g_sub_can = n->subscribe("can_tx", 100, recvCan, NODELAY);
+  g_sub_report = n->subscribe("ulc_report", 10, recvReport, NODELAY);
   g_pub_ulc_cmd = n->advertise<dataspeed_ulc_msgs::UlcCmd>("ulc_cmd", 2);
   g_pub_enable = n->advertise<std_msgs::Bool>("dbw_enabled", 2);
   g_pub_twist = n->advertise<geometry_msgs::Twist>("cmd_vel", 2);
