@@ -2,8 +2,8 @@
 Changelog for package dataspeed_ulc_can
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.0.3 (2018-12-09)
+------------------
 * Added tcpNoDelay() for subscribers
 * Contributors: Kevin Hallenbeck
 
